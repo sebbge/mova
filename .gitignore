@@ -1,3 +1,5 @@
 .artifact
 node_modules
 .project
+dist
+.env

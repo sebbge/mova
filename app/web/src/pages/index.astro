@@ -1,0 +1,88 @@
+---
+import Base from '~/layouts/Base.astro';
+import {DEFAULT_REGION, REGIONS} from '~/lib/domain/regions';
+import LineSearch from '~/lib/line/LineSearch';
+import Header from '~/lib/ui/Header';
+import {href} from '~/lib/ui/href';
+---
+
+<Base
+  title='bondi: horarios y recorridos del transporte público uruguayo'
+  description='Consultá horarios, recorridos y llegadas en tiempo real del transporte público de Montevideo. Buscá tu línea o mirá las paradas cercanas.'>
+  <Header />
+  <main>
+    <section class='hero'>
+      <h1>¿Qué bondi te lleva?</h1>
+      <p class='lede'>Horarios, recorridos y llegadas en tiempo real del transporte público uruguayo.</p>
+      <LineSearch client:idle region={DEFAULT_REGION.slug} />
+    </section>
+
+    <section class='regions'>
+      <h2>Regiones</h2>
+      <ul>
+        {REGIONS.map((region) => (
+          <li>
+            <a href={href.region(region.slug)}>{region.name}</a>
+          </li>
+        ))}
+      </ul>
+      <p class='note'>Por ahora bondi cubre Montevideo. Vamos sumando el resto del país.</p>
+    </section>
+  </main>
+</Base>
+
+<style>
+  main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-8) var(--gutter);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .hero {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .lede {
+    color: var(--text-secondary);
+  }
+
+  .regions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .regions ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .regions a {
+    display: inline-block;
+    padding: var(--space-2) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-pill);
+    font-weight: 600;
+  }
+
+  .regions a:hover {
+    text-decoration: none;
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+
+  .note {
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+  }
+</style>

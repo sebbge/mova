@@ -1,0 +1,22 @@
+.map {
+  position: absolute;
+  inset: 0;
+}
+
+.banner {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface);
+  color: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--banner-shadow);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.error {
+  color: var(--freshness-imprecise);
+}

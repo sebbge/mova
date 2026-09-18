@@ -1,0 +1,23 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--badge);
+  color: var(--brand-contrast);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.01em;
+}
+
+.md {
+  min-width: 3.25rem;
+  padding: var(--space-1) var(--space-2);
+  font-size: 1.0625rem;
+}
+
+.sm {
+  min-width: 2.5rem;
+  padding: 2px var(--space-1);
+  font-size: 0.875rem;
+}

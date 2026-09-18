@@ -1,0 +1,60 @@
+---
+import Base from '~/layouts/Base.astro';
+import type {Region} from '~/lib/domain/regions';
+import LineSearch from '~/lib/line/LineSearch';
+import Header from '~/lib/ui/Header';
+import {href} from '~/lib/ui/href';
+import {regionPaths} from '../_regions';
+
+export const getStaticPaths = regionPaths;
+
+const {region} = Astro.props as {region: Region};
+---
+
+<Base
+  title={`Transporte público en ${region.name} | bondi`}
+  description={`Horarios, recorridos y llegadas en tiempo real de los ómnibus de ${region.name}.`}>
+  <Header back='/' />
+  <main>
+    <h1>{region.name}</h1>
+    <LineSearch client:idle region={region.slug} />
+
+    <a class='map' href={href.map(region.slug)}>
+      <span>Ver el mapa</span>
+      <span class='sub'>Paradas cercanas y buses en vivo</span>
+    </a>
+  </main>
+</Base>
+
+<style>
+  main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-6) var(--gutter);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .map {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    font-weight: 600;
+  }
+
+  .map:hover {
+    text-decoration: none;
+    border-color: var(--brand);
+  }
+
+  .sub {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 0.9375rem;
+  }
+</style>

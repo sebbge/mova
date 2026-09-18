@@ -1,0 +1,394 @@
+{
+  "lines": [
+    {
+      "line": "174",
+      "destination": "Aviación Civil",
+      "company": "CUTCSA",
+      "arrivals": [
+        {
+          "eta": 0,
+          "live": true,
+          "bus": {
+            "id": "51",
+            "line": "174",
+            "company": "CUTCSA",
+            "location": {
+              "lat": -34.901062,
+              "lng": -56.164192
+            },
+            "speed": 1.0,
+            "origin": "PUNTA CARRETAS",
+            "destination": "AVIACIÓN CIVIL",
+            "headsign": "Ida",
+            "access": "Piso bajo",
+            "emissions": "Euro v",
+            "thermal_comfort": "Aire acondicionado",
+            "bearing_deg": 354.82966796878196,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 10,
+          "live": false
+        },
+        {
+          "eta": 19,
+          "live": false
+        }
+      ]
+    },
+    {
+      "line": "121",
+      "destination": "Ciudad Vieja",
+      "company": "CUTCSA",
+      "arrivals": [
+        {
+          "eta": 1,
+          "live": true,
+          "bus": {
+            "id": "141",
+            "line": "121",
+            "company": "CUTCSA",
+            "location": {
+              "lat": -34.9044,
+              "lng": -56.16376
+            },
+            "speed": 5.0,
+            "origin": "PUNTA CARRETAS",
+            "destination": "CIUDAD VIEJA",
+            "headsign": "Vuelta",
+            "access": "Piso bajo",
+            "emissions": "Euro v",
+            "thermal_comfort": "Aire acondicionado",
+            "bearing_deg": 353.1517132882493,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 11,
+          "live": false
+        },
+        {
+          "eta": 23,
+          "live": false
+        }
+      ]
+    },
+    {
+      "line": "526",
+      "destination": "Complejo América",
+      "company": "COME",
+      "arrivals": [
+        {
+          "eta": 1,
+          "live": true,
+          "bus": {
+            "id": "32",
+            "line": "526",
+            "company": "COME",
+            "location": {
+              "lat": -34.902973,
+              "lng": -56.160366
+            },
+            "speed": 22.0,
+            "origin": "PLAYA MALVÍN",
+            "destination": "COMPLEJO AMÉRICA",
+            "headsign": "Ida",
+            "timestamp": "2026-09-18T22:56:11+00:00",
+            "access": "Piso bajo",
+            "emissions": "Euro iii",
+            "thermal_comfort": "Aire acondicionado",
+            "bearing_deg": 277.33232451988636,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 1,
+          "live": true,
+          "bus": {
+            "id": "9",
+            "line": "526",
+            "company": "COME",
+            "location": {
+              "lat": -34.902863,
+              "lng": -56.161102
+            },
+            "speed": 0.0,
+            "origin": "PLAYA MALVÍN",
+            "destination": "SAYAGO",
+            "headsign": "Ida",
+            "timestamp": "2026-09-18T22:56:07+00:00",
+            "emissions": "Euro iii",
+            "bearing_deg": 281.50748441607146,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 5,
+          "live": true,
+          "bus": {
+            "id": "7",
+            "line": "526",
+            "company": "COME",
+            "location": {
+              "lat": -34.899612,
+              "lng": -56.12882
+            },
+            "speed": 41.0,
+            "origin": "PLAYA MALVÍN",
+            "destination": "COMPLEJO AMÉRICA",
+            "headsign": "Ida",
+            "timestamp": "2026-09-18T22:56:11+00:00",
+            "access": "Plataforma elevadora",
+            "emissions": "Euro iii",
+            "bearing_deg": 241.93038127686583,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        }
+      ]
+    },
+    {
+      "line": "300",
+      "destination": "Instrucciones Y José Belloni",
+      "company": "UCOT",
+      "arrivals": [
+        {
+          "eta": 2,
+          "live": true,
+          "bus": {
+            "id": "156",
+            "line": "300",
+            "company": "UCOT",
+            "location": {
+              "lat": -34.91168,
+              "lng": -56.163
+            },
+            "speed": 30.0,
+            "origin": "PLAZA ZITARROSA",
+            "destination": "INSTRUCCIONES Y JOSÉ BELLONI",
+            "headsign": "Ida",
+            "timestamp": "2026-09-18T22:55:50+00:00",
+            "access": "Piso bajo",
+            "bearing_deg": 353.15358172919673,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 14,
+          "live": true,
+          "bus": {
+            "id": "125",
+            "line": "300",
+            "company": "UCOT",
+            "location": {
+              "lat": -34.912315,
+              "lng": -56.17951
+            },
+            "speed": 19.0,
+            "origin": "PLAZA ZITARROSA",
+            "destination": "INSTRUCCIONES Y JOSÉ BELLONI",
+            "headsign": "Ida",
+            "timestamp": "2026-09-18T22:56:07+00:00",
+            "access": "Piso bajo",
+            "bearing_deg": 86.0429250026115,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 7,
+          "live": false
+        }
+      ]
+    },
+    {
+      "line": "181",
+      "destination": "Paso Molino",
+      "company": "CUTCSA",
+      "arrivals": [
+        {
+          "eta": 6,
+          "live": true,
+          "bus": {
+            "id": "93",
+            "line": "181",
+            "company": "CUTCSA",
+            "location": {
+              "lat": -34.91203,
+              "lng": -56.159855
+            },
+            "speed": 1.0,
+            "origin": "POCITOS",
+            "destination": "PASO MOLINO",
+            "headsign": "Ida",
+            "access": "Piso bajo",
+            "emissions": "Euro v",
+            "thermal_comfort": "Aire acondicionado",
+            "bearing_deg": 288.3928612140838,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 10,
+          "live": false
+        },
+        {
+          "eta": 17,
+          "live": false
+        }
+      ]
+    },
+    {
+      "line": "163",
+      "destination": "Paso De La Arena",
+      "company": "CUTCSA",
+      "arrivals": [
+        {
+          "eta": 9,
+          "live": true,
+          "bus": {
+            "id": "478",
+            "line": "163",
+            "company": "CUTCSA",
+            "location": {
+              "lat": -34.907787,
+              "lng": -56.149315
+            },
+            "speed": 1.0,
+            "origin": "POCITOS",
+            "destination": "PASO DE LA ARENA",
+            "headsign": "Ida",
+            "emissions": "Euro iii",
+            "bearing_deg": 317.0981511853512,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 22,
+          "live": false
+        },
+        {
+          "eta": 40,
+          "live": false
+        }
+      ]
+    },
+    {
+      "line": "407",
+      "destination": "Portones",
+      "company": "COETC",
+      "arrivals": [
+        {
+          "eta": 24,
+          "live": true,
+          "bus": {
+            "id": "53",
+            "line": "407",
+            "company": "COETC",
+            "location": {
+              "lat": -34.912224,
+              "lng": -56.17815
+            },
+            "speed": 8.0,
+            "origin": "PLAZA ESPAÑA",
+            "destination": "PORTONES",
+            "headsign": "Ida",
+            "timestamp": "2026-09-18T22:56:05+00:00",
+            "access": "Piso bajo",
+            "emissions": "Euro iii",
+            "thermal_comfort": "Aire acondicionado",
+            "bearing_deg": 86.18654795395612,
+            "freshness": "live",
+            "still": false,
+            "past_stop": false,
+            "stale_count": 0,
+            "miss_count": 0,
+            "last_seen_epoch": 1789772175
+          }
+        },
+        {
+          "eta": 13,
+          "live": false
+        },
+        {
+          "eta": 38,
+          "live": false
+        }
+      ]
+    },
+    {
+      "line": "71",
+      "destination": "Mendoza E Instrucciones",
+      "company": "",
+      "arrivals": [
+        {
+          "eta": 26,
+          "live": false
+        }
+      ]
+    },
+    {
+      "line": "157",
+      "destination": "Paso De La Arena",
+      "company": "",
+      "arrivals": [
+        {
+          "eta": 90,
+          "live": false
+        },
+        {
+          "eta": 138,
+          "live": false
+        },
+        {
+          "eta": 213,
+          "live": false
+        }
+      ]
+    }
+  ]
+}

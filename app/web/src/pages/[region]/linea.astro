@@ -1,0 +1,30 @@
+---
+import Base from '~/layouts/Base.astro';
+import type {Region} from '~/lib/domain/regions';
+import LineRoute from '~/lib/line/LineRoute';
+import Header from '~/lib/ui/Header';
+import {href} from '~/lib/ui/href';
+import {regionPaths} from '../_regions';
+
+export const getStaticPaths = regionPaths;
+
+const {region} = Astro.props as {region: Region};
+---
+
+<Base title={`Línea, ${region.name} | bondi`} noindex>
+  <Header back={href.region(region.slug)} />
+  <main>
+    <LineRoute client:only='solid-js' region={region} />
+  </main>
+</Base>
+
+<style>
+  main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-6) var(--gutter);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+</style>

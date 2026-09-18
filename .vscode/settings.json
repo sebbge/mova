@@ -1,0 +1,139 @@
+{
+  "better-comments.tags": [
+    //# TITLES
+    {
+      "tag": "#",
+      "color": "#EBD6D1",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": true,
+      "italic": false
+    },
+    /// # DOC TITLES
+    {
+      "tag": "/ #",
+      "color": "#EBD6D1",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": true,
+      "italic": false
+    },
+    /// DOC
+    {
+      "tag": "/",
+      "color": "#8C9190",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": true
+    },
+    // TODO
+    {
+      "tag": "todo",
+      "color": "#FF8C00",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    // DEBUG
+    {
+      "tag": "debug",
+      "color": "#C179C3",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": true,
+      "italic": false
+    },
+    //= SECTION
+    {
+      "tag": "=",
+      "color": "#799CC3",
+      "strikethrough": false,
+      "underline": true,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    //- Note
+    {
+      "tag": "-",
+      "color": "#BABECC",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    //- Note underlined
+    {
+      "tag": "- Note",
+      "color": "#BABECC",
+      "strikethrough": false,
+      "underline": true,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    //!
+    {
+      "tag": "!",
+      "color": "#E6724C",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    //?
+    {
+      "tag": "?",
+      "color": "#3498DB",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    // normal
+    {
+      "tag": "//",
+      "color": "#474747",
+      "strikethrough": true,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    },
+    //*
+    {
+      "tag": "*",
+      "color": "#98C379",
+      "strikethrough": false,
+      "underline": false,
+      "backgroundColor": "transparent",
+      "bold": false,
+      "italic": false
+    }
+  ],
+  "material-icon-theme.folders.associations": {},
+  "material-icon-theme.files.customClones": [
+    {
+      "name": "rust-mod",
+      "base": "rust",
+      "color": "blue-400",
+      "fileNames": ["mod.rs"]
+    },
+    {
+      "name": "rust-lib",
+      "base": "rust",
+      "color": "green-400",
+      "fileNames": ["lib.rs"]
+    }
+  ]
+}
