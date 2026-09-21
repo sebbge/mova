@@ -1,0 +1,30 @@
+---
+import '~/app.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  canonical?: string;
+  noindex?: boolean;
+}
+
+const {title, description, canonical, noindex} = Astro.props;
+---
+
+<!doctype html>
+<html lang='es'>
+  <head>
+    <meta charset='utf-8' />
+    <meta name='viewport' content='width=device-width, initial-scale=1' />
+    <meta name='theme-color' content='#00b360' />
+    <link rel='icon' href='/favicon.svg' />
+    <title>{title}</title>
+    {description && <meta name='description' content={description} />}
+    {canonical && <link rel='canonical' href={canonical} />}
+    {noindex && <meta name='robots' content='noindex' />}
+    <slot name='head' />
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

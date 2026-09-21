@@ -1,0 +1,35 @@
+---
+import Base from '~/layouts/Base.astro';
+import type {Region} from '~/lib/domain/regions';
+import Explore from '~/lib/explore/Explore';
+import Header from '~/lib/ui/Header';
+import {href} from '~/lib/ui/href';
+import {regionPaths} from '../_paths';
+
+export const getStaticPaths = regionPaths;
+
+const {region} = Astro.props as {region: Region};
+---
+
+<Base title={`Mapa, ${region.name} | bondi`} noindex>
+  <div class='screen'>
+    <Header back={href.region(region.slug)} />
+    <div class='canvas'>
+      <Explore client:only='solid-js' region={region} />
+    </div>
+  </div>
+</Base>
+
+<style>
+  .screen {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .canvas {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+  }
+</style>

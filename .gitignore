@@ -3,3 +3,7 @@ node_modules
 .project
 dist
 .env
+
+# map tiles
+client/web/public/tiles/*.pmtiles
+gtfs_example.zip

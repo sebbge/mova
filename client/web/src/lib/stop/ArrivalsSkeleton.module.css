@@ -1,0 +1,35 @@
+.root {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--divider);
+  border-radius: var(--radius);
+  overflow: hidden;
+
+  li {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    background: var(--surface);
+  }
+}
+
+.badge {
+  width: 2.75rem;
+  height: 1.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.destination {
+  height: 0.875rem;
+}
+
+.eta {
+  width: 3.25rem;
+  height: 1rem;
+}

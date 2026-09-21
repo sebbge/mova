@@ -1,0 +1,221 @@
+---
+import {PUBLIC_SITE_URL} from 'astro:env/client';
+import Base from '~/layouts/Base.astro';
+import {api} from '~/lib/api/client';
+import type {RouteShape} from '~/lib/api/types';
+import type {Region} from '~/lib/domain/regions';
+import LineBadge from '~/lib/line/LineBadge';
+import Header from '~/lib/ui/Header';
+import {href} from '~/lib/ui/href';
+import {linePaths} from '../../_paths';
+
+export const getStaticPaths = linePaths;
+
+const {region, line} = Astro.props as {region: Region; line: string};
+
+const variants = (await api.searchRoutes(line).catch(() => [])).filter((r) => r.route_short_name === line);
+const longName = variants[0]?.route_long_name ?? '';
+
+// every variant in the html, query params get no url
+const requested = await Promise.all(
+  variants.flatMap((v) => [0, 1].map((d) => api.routeShape(v.route_id, d).catch(() => null)))
+);
+
+// dedup what the server served, one-way routes repeat
+const seen = new Set<string>();
+const shapes = requested
+  .filter((s): s is RouteShape => s !== null)
+  .filter((s) => !seen.has(key(s)) && seen.add(key(s)));
+
+function key(s: RouteShape): string {
+  return `${s.route_id}-${s.direction_id}`;
+}
+
+function headsign(s: RouteShape, fallback: [string, string]): string {
+  return s.headsign ?? fallback[s.direction_id === 0 ? 0 : 1];
+}
+---
+
+<Base
+  title={`Línea ${line}${longName ? ` · ${longName}` : ''}, ${region.name} | bondi`}
+  description={`Recorrido y paradas de la línea ${line} de ${region.name}${longName ? `: ${longName}` : ''}.`}
+  canonical={`${PUBLIC_SITE_URL}${href.line(region.slug, line)}`}>
+  <Header back={href.region(region.slug)} />
+
+  <main>
+    <div class='head'>
+      <LineBadge line={line} />
+      <h1>{longName}</h1>
+    </div>
+
+    <a class='map-link' href={href.map(region.slug, {linea: line})}>
+      <span>Ver en el mapa</span>
+      <span class='sub'>Recorrido y buses en vivo</span>
+    </a>
+
+    {shapes.length === 0 ? (
+      <p class='note'>No encontramos recorridos para la línea {line}.</p>
+    ) : (
+      <>
+        {shapes.length > 1 && (
+          <nav aria-label='Recorrido'>
+            {shapes.map((s) => (
+              <a
+                href={href.line(region.slug, line, {route: s.route_id, direction: s.direction_id})}
+                data-route-link={key(s)}>
+                {headsign(s, ['Ida', 'Vuelta'])}
+              </a>
+            ))}
+          </nav>
+        )}
+
+        {shapes.map((s) => (
+          <section data-route={key(s)}>
+            <h2>
+              Hacia {headsign(s, ['ida', 'vuelta'])} · {s.stops.length} paradas
+            </h2>
+            <ol class='stops'>
+              {s.stops.map((stop) => (
+                <li>
+                  <a href={href.stop(region.slug, stop.stop_id)}>
+                    <span class='id'>{stop.stop_id}</span>
+                    <span class='name'>{stop.stop_name}</span>
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </section>
+        ))}
+      </>
+    )}
+  </main>
+</Base>
+
+<script>
+  const params = new URLSearchParams(location.search);
+  const sections = [...document.querySelectorAll<HTMLElement>('[data-route]')];
+  const wanted = `${params.get('v')}-${params.get('d') ?? 0}`;
+  const active = sections.some((s) => s.dataset.route === wanted) ? wanted : sections[0]?.dataset.route;
+
+  for (const section of sections) section.hidden = section.dataset.route !== active;
+  for (const link of document.querySelectorAll<HTMLElement>('[data-route-link]')) {
+    if (link.dataset.routeLink === active) link.setAttribute('aria-current', 'true');
+  }
+</script>
+
+<style>
+  main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-6) var(--gutter);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  h1 {
+    font-size: 1.375rem;
+  }
+
+  h2 {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-3);
+  }
+
+  .note {
+    color: var(--text-secondary);
+  }
+
+  .map-link {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--radius);
+    font-weight: 600;
+  }
+
+  .map-link:hover {
+    text-decoration: none;
+    border-color: var(--brand);
+  }
+
+  .sub {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 0.875rem;
+  }
+
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  nav a {
+    padding: var(--space-2) var(--space-3);
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-pill);
+    font-size: 0.875rem;
+  }
+
+  nav a:hover {
+    text-decoration: none;
+    border-color: var(--brand);
+  }
+
+  nav a[aria-current='true'] {
+    background: var(--brand);
+    border-color: var(--brand);
+    color: var(--brand-contrast);
+    font-weight: 600;
+  }
+
+  .stops {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--divider);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .stops a {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+  }
+
+  .stops a:hover {
+    text-decoration: none;
+    background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+  }
+
+  .id {
+    min-width: 3.5rem;
+    color: var(--text-secondary);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .name {
+    font-size: 0.9375rem;
+  }
+</style>

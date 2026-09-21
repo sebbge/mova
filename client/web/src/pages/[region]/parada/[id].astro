@@ -1,0 +1,138 @@
+---
+import {PUBLIC_SITE_URL} from 'astro:env/client';
+import Base from '~/layouts/Base.astro';
+import {api} from '~/lib/api/client';
+import type {Region} from '~/lib/domain/regions';
+import LineBadge from '~/lib/line/LineBadge';
+import Arrivals from '~/lib/stop/Arrivals';
+import Header from '~/lib/ui/Header';
+import {href} from '~/lib/ui/href';
+import {stopPaths} from '../../_paths';
+
+export const getStaticPaths = stopPaths;
+
+const {region} = Astro.props as {region: Region};
+const stop = await api.stop(Astro.params.id!);
+const name = stop.stop_name;
+const lineList = stop.lines
+  .map((l) => l.line)
+  .slice(0, 8)
+  .join(', ');
+
+const description = stop.lines.length
+  ? `Horarios y llegadas en la parada ${stop.stop_id}, ${name}. Líneas ${lineList}.`
+  : `Parada ${stop.stop_id}, ${name}, en ${region.name}.`;
+
+const jsonLd = JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'BusStop',
+  name,
+  identifier: stop.stop_id,
+  address: {'@type': 'PostalAddress', addressLocality: region.name, addressCountry: 'UY'},
+  geo: {'@type': 'GeoCoordinates', latitude: stop.lat, longitude: stop.lng},
+});
+---
+
+<Base
+  title={`Parada ${stop.stop_id} · ${name}, ${region.name} | bondi`}
+  description={description}
+  canonical={`${PUBLIC_SITE_URL}${href.stop(region.slug, stop.stop_id)}`}>
+  <script type='application/ld+json' set:html={jsonLd} slot='head' />
+  <Header back={href.region(region.slug)} />
+
+  <main>
+    <div class='head'>
+      <span class='kicker'>Parada {stop.stop_id}</span>
+      <h1>{name}</h1>
+    </div>
+
+    <Arrivals client:load stopId={stop.stop_id} />
+
+    <section>
+      <h2>Líneas que paran acá</h2>
+      {stop.lines.length === 0 ? (
+        <p class='note'>Ninguna línea registrada en esta parada.</p>
+      ) : (
+        <ul class='lines'>
+          {stop.lines.map((line) => (
+            <li>
+              <a href={href.line(region.slug, line.line)}>
+                <LineBadge line={line.line} size='sm' />
+                <span class='destinations'>{line.destinations.join(' · ')}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  </main>
+</Base>
+
+<style>
+  main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-6) var(--gutter);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .kicker {
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .note {
+    color: var(--text-secondary);
+    font-size: 0.9375rem;
+  }
+
+  .lines {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--divider);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .lines a {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+  }
+
+  .lines a:hover {
+    text-decoration: none;
+    background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+  }
+
+  .destinations {
+    font-size: 0.9375rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>
