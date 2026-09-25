@@ -3,8 +3,11 @@ import type {StyleSpecification} from 'maplibre-gl';
 
 const ASSETS = 'https://protomaps.github.io/basemaps-assets';
 
+export const ATTRIBUTION =
+  '<a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>';
+
 // range requests
-export function basemapStyle(dark: boolean, regionId: string): StyleSpecification {
+export function basemapStyle(dark: boolean): StyleSpecification {
   const flavor = dark ? 'dark' : 'light';
 
   return {
@@ -12,12 +15,7 @@ export function basemapStyle(dark: boolean, regionId: string): StyleSpecificatio
     glyphs: `${ASSETS}/fonts/{fontstack}/{range}.pbf`,
     sprite: `${ASSETS}/sprites/v4/${flavor}`,
     sources: {
-      protomaps: {
-        type: 'vector',
-        url: `pmtiles:///tiles/${regionId}.pmtiles`,
-        attribution:
-          '<a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org">OpenStreetMap</a>',
-      },
+      protomaps: {type: 'vector', url: 'pmtiles:///tiles/uy.pmtiles', attribution: ATTRIBUTION},
     },
     layers: layers('protomaps', namedFlavor(flavor), {lang: 'es'}),
   };

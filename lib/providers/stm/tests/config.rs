@@ -1,20 +1,30 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
 use citymob_core::Error;
-use citymob_stm::Stm;
+use citymob_stm::{StmConfig, provider};
 
-const ENV: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/.env");
+fn config() -> StmConfig {
+  StmConfig {
+    api_url: "https://api.example/transportepublico".into(),
+    auth_url: "https://auth.example/token".into(),
+    client_id: "id".into(),
+    client_secret: "secret".into(),
+  }
+}
 
 #[test]
-fn reads_config_from_its_own_dir() {
-  let outcome = Stm::new().map(|_| ());
+fn builds_from_the_config_it_receives() {
+  assert!(provider(config()).is_ok());
+}
 
-  if std::path::Path::new(ENV).exists() {
-    assert!(outcome.is_ok(), "with {ENV} present it should build: {:?}", outcome.err());
-  } else {
-    match outcome.err() {
-      Some(Error::Config(msg)) => assert!(msg.contains("IM_"), "the error should name the variable: {msg}"),
-      other => panic!("without .env it should fail with Config, not {other:?}"),
+#[test]
+fn rejects_an_empty_credential_naming_it() {
+  let outcome = provider(StmConfig { client_secret: "  ".into(), ..config() });
+
+  match outcome.err() {
+    Some(Error::Config(msg)) => {
+      assert!(msg.contains("IM_CLIENT_SECRET"), "the error should name the variable: {msg}")
     }
+    other => panic!("it should fail with Config, not {other:?}"),
   }
 }

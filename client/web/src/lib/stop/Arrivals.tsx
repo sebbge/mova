@@ -1,4 +1,4 @@
-import {For, Match, Switch} from 'solid-js';
+import {For, Match, onCleanup, Switch} from 'solid-js';
 import {eta} from '~/lib/format';
 import {freshnessVar} from '~/lib/ui/palette';
 import styles from './Arrivals.module.css';
@@ -8,6 +8,7 @@ import ArrivalsSkeleton from './ArrivalsSkeleton';
 export default function Arrivals(props: {stopId: string}) {
   // eslint-disable-next-line solid/reactivity
   const source = new ArrivalsSource(props.stopId);
+  onCleanup(() => source.close());
 
   return (
     <section class={styles.root}>
@@ -43,7 +44,7 @@ export default function Arrivals(props: {stopId: string}) {
           <p class='sr-only' role='status'>
             Buscando llegadas
           </p>
-          <ArrivalsSkeleton />
+          <ArrivalsSkeleton rows={6} />
         </Match>
         <Match when={source.lines.length === 0 && source.liveFailed}>
           <p class={styles.note}>No pudimos traer las llegadas. Los horarios de las líneas siguen abajo.</p>

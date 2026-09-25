@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::scope::Scope;
 
 mod repository;
 
@@ -7,6 +8,7 @@ mod repository;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bus {
   pub id: String,
+  pub unit: String,
   pub line: String,
   pub company: String,
   pub location: Point,
@@ -16,11 +18,16 @@ pub struct Bus {
   pub destination: Option<String>,
   pub headsign: Option<String>,
 
+  /// Static shape, per realtime
+  #[serde(default)]
+  pub shape_id: Option<String>,
+
   pub timestamp: Option<String>,
   //
   pub access: Option<String>,
   pub emissions: Option<String>,
   pub thermal_comfort: Option<String>,
+  pub delay_min: Option<i64>,
   //
   pub bearing_deg: Option<f64>,
   pub freshness: BusFreshness,
@@ -55,7 +62,9 @@ impl BusFreshness {
 }
 
 //# Line def
-use crate::core::{bus::BusEntry, geo::Point};
+use crate::core::{bus::BusEntry, geo::Point, provider::Vehicles};
+
+use std::time::Duration;
 
 pub type Headsigns = (Vec<String>, Vec<String>);
 
@@ -74,7 +83,12 @@ impl Bus {
   const STALE_THRESHOLD: u8 = 3;
 
   pub fn from_observation(obs: BusEntry, prev: Option<&Self>) -> Self {
-    let (bearing_deg, still, stale_count) = if let Some(prev) = prev {
+    let timestamp = obs.timestamp.map(|t| t.to_rfc3339());
+    let repeated = prev.filter(|prev| prev.timestamp.is_some() && prev.timestamp == timestamp);
+
+    let (bearing_deg, still, stale_count) = if let Some(prev) = repeated {
+      (prev.bearing_deg, prev.still, prev.stale_count)
+    } else if let Some(prev) = prev {
       let dist = prev.location.distance_to(&obs.location);
 
       let bearing_deg =
@@ -94,6 +108,7 @@ impl Bus {
 
     Self {
       id: obs.id,
+      unit: obs.unit,
       line: obs.line,
       company: obs.company,
       location: obs.location,
@@ -102,12 +117,14 @@ impl Bus {
       origin: obs.origin,
       destination: obs.destination,
       headsign: None,
+      shape_id: obs.shape_id,
 
-      timestamp: obs.timestamp.map(|t| t.to_rfc3339()),
+      timestamp,
       //
       access: obs.access,
       emissions: obs.emissions,
       thermal_comfort: obs.thermal_comfort,
+      delay_min: obs.delay_min,
       //
       bearing_deg,
       freshness: BusFreshness::Live,
@@ -117,24 +134,27 @@ impl Bus {
       last_seen_epoch: chrono::Utc::now().timestamp(),
     }
   }
-
-  pub fn get_speed(&self) -> f64 {
-    if self.still {
-      return 0.0;
-    }
-    if self.speed >= 5.0 { self.speed } else { 20.0 }
-  }
 }
 
 //# Line impl
 pub type Lines = HashMap<String, Line>;
 impl Line {
-  pub async fn fetch(state: &crate::State, line_ids: &[String]) -> crate::Result<Lines> {
+  pub const FLEET_STALE: Duration = Duration::from_secs(60);
+  const FLEET_WAIT: Duration = Duration::from_secs(15);
+
+  pub async fn fetch(state: &crate::State, scope: &Scope, line_ids: &[String]) -> crate::Result<Lines> {
+    use crate::cache::BusTracking;
+
+    let tracker = state.cache.tracker();
+    if let Some(Vehicles::Fleet(_)) = scope.vehicles() {
+      tracker.touch(&scope.provider);
+    }
+
     let mut lines: Lines = HashMap::new();
     let mut uncached: Vec<String> = Vec::new();
 
     for line_id in line_ids {
-      if let Some(cached) = Line::cache_get(&state.cache, line_id).await {
+      if let Some(cached) = Line::cache_get(&state.cache, &scope.region, &scope.provider, line_id).await {
         lines.insert(line_id.clone(), cached);
       } else {
         uncached.push(line_id.clone());
@@ -144,63 +164,121 @@ impl Line {
       return Ok(lines);
     }
 
-    let mut by_line = state.provider.buses(&uncached).await?;
-
-    for line_id in &uncached {
-      let im_buses = by_line.remove(line_id).unwrap_or_default();
-      let line = Line::build(state, line_id, im_buses).await;
-      lines.insert(line_id.clone(), line);
+    match scope.vehicles() {
+      None => {}
+      Some(Vehicles::Lines(vehicles)) => {
+        let mut by_line = vehicles.buses(&uncached).await?;
+        for line_id in &uncached {
+          let observations = by_line.remove(line_id).unwrap_or_default();
+          let line = Line::build(state, scope, line_id, observations).await;
+          lines.insert(line_id.clone(), line);
+        }
+      }
+      Some(Vehicles::Fleet(_)) => {
+        let view =
+          tracker.wait_view(&scope.provider, Self::FLEET_STALE, Self::FLEET_WAIT).await.ok_or(crate::Error::Timeout)?;
+        for line_id in &uncached {
+          let buses = view.by_line.get(line_id).cloned().unwrap_or_default();
+          let line = Line::enrich(state, scope, line_id, buses).await;
+          lines.insert(line_id.clone(), line);
+        }
+      }
     }
 
     Ok(lines)
   }
 
-  async fn build(state: &crate::State, line: &str, observations: Vec<BusEntry>) -> Self {
+  pub async fn observe_fleet(state: &crate::State, scope: &Scope, fleet: Vec<BusEntry>) {
     use crate::cache::BusTracking;
 
     let tracker = state.cache.tracker();
-    let headsigns = Self::load_headsigns(state, line).await;
+    let provider = scope.provider.as_str();
+    if tracker.view(provider, Self::FLEET_STALE).await.is_none() {
+      tracker.forget(provider).await;
+    }
+
+    let mut by_line: HashMap<String, Vec<Bus>> = HashMap::new();
+    let mut seen_ids = HashSet::new();
+    for obs in fleet {
+      if !seen_ids.insert(obs.id.clone()) {
+        continue;
+      }
+      let bus = Self::track(tracker, provider, obs).await;
+      by_line.entry(bus.line.clone()).or_default().push(bus);
+    }
+
+    let ghosts = Self::ghosts(tracker, provider, None, &seen_ids).await;
+    tracing::debug!(provider, live = seen_ids.len(), ghosts = ghosts.len(), "[fleet] observed");
+    for ghost in ghosts {
+      by_line.entry(ghost.line.clone()).or_default().push(ghost);
+    }
+
+    tracker.publish(provider, by_line).await;
+  }
+
+  async fn build(state: &crate::State, scope: &Scope, line: &str, observations: Vec<BusEntry>) -> Self {
+    use crate::cache::BusTracking;
+
+    let tracker = state.cache.tracker();
+    let provider = scope.provider.as_str();
 
     let mut buses = Vec::new();
     let mut seen_ids = HashSet::new();
     for obs in observations {
-      let id = obs.id.clone();
-
-      let mut tracked_buses = tracker.buses.write().await;
-      let prev = tracked_buses.get(&id).cloned();
-      let mut bus = Bus::from_observation(obs, prev.as_ref());
-      bus.headsign = Self::compute_headsign(&bus.origin, &bus.destination, &headsigns);
-      seen_ids.insert(id.clone());
-      buses.push(bus.clone());
-      tracked_buses.insert(id, bus);
+      seen_ids.insert(obs.id.clone());
+      buses.push(Self::track(tracker, provider, obs).await);
     }
+    buses.extend(Self::ghosts(tracker, provider, Some(line), &seen_ids).await);
 
-    for id in tracker.missing_ids(line, &seen_ids).await {
-      let Some((freshness, _)) = tracker.missing(&id).await else {
+    Self::enrich(state, scope, line, buses).await
+  }
+
+  async fn track(tracker: &crate::cache::BusTracker, provider: &str, obs: BusEntry) -> Bus {
+    let prev = tracker.get(provider, &obs.id).await;
+    let bus = Bus::from_observation(obs, prev.as_ref());
+    tracker.upsert(provider, &bus.id, bus.clone()).await;
+    bus
+  }
+
+  async fn ghosts(
+    tracker: &crate::cache::BusTracker,
+    provider: &str,
+    line: Option<&str>,
+    seen_ids: &HashSet<String>,
+  ) -> Vec<Bus> {
+    let mut ghosts = Vec::new();
+    for id in tracker.missing_ids(provider, line, seen_ids).await {
+      let Some((freshness, _)) = tracker.missing(provider, &id).await else {
         continue;
       };
-      let Some(entry) = tracker.get(&id).await else {
+      let Some(mut bus) = tracker.get(provider, &id).await else {
         continue;
       };
-      if entry.line.is_empty() || entry.timestamp.is_none() || entry.company.is_empty() {
+      if bus.line.is_empty() || bus.timestamp.is_none() || bus.company.is_empty() {
         continue;
       }
-      let mut bus = entry;
       bus.freshness = freshness;
-      bus.headsign = Self::compute_headsign(&bus.origin, &bus.destination, &headsigns);
       bus.still = true;
-      buses.push(bus);
+      ghosts.push(bus);
+    }
+    ghosts
+  }
+
+  async fn enrich(state: &crate::State, scope: &Scope, line: &str, mut buses: Vec<Bus>) -> Self {
+    let headsigns = Self::load_headsigns(state, scope, line).await;
+    for bus in &mut buses {
+      bus.headsign = Self::compute_headsign(&bus.origin, &bus.destination, &headsigns);
     }
 
-    Self::fill_missing_bearings(state, line, &mut buses).await;
-    Self::cache_set(&state.cache, line, &buses).await;
+    Self::fill_missing_bearings(state, scope, line, &mut buses).await;
+    Self::cache_set(&state.cache, &scope.region, &scope.provider, line, &buses).await;
 
     let destination = buses.first().map(|b| b.destination.clone()).unwrap_or_default();
     let company = buses.first().map(|b| b.company.clone()).unwrap_or_default();
     Self { line_id: line.to_string(), company, destination, buses }
   }
 
-  async fn fill_missing_bearings(state: &crate::State, line: &str, positions: &mut [Bus]) {
+  async fn fill_missing_bearings(state: &crate::State, scope: &Scope, line: &str, positions: &mut [Bus]) {
     let missing: Vec<usize> =
       positions.iter().enumerate().filter(|(_, p)| p.bearing_deg.is_none()).map(|(i, _)| i).collect();
 
@@ -221,7 +299,7 @@ impl Line {
       p_dests.push(p.destination.clone());
     }
 
-    let rows = Self::query_bearings(&state.db, line, &p_ids, &p_lats, &p_lngs, &p_dests).await;
+    let rows = Self::query_bearings(&state.db, scope, line, &p_ids, &p_lats, &p_lngs, &p_dests).await;
 
     let bearing_map: HashMap<&str, f64> =
       rows.iter().filter_map(|r| r.bearing_deg.map(|b| (r.bus_id.as_str(), b))).collect();
@@ -231,17 +309,19 @@ impl Line {
       let p = &mut positions[i];
       if let Some(&deg) = bearing_map.get(p.id.as_str()) {
         p.bearing_deg = Some(deg);
-        state.cache.tracker().set_bearing(&p.id, deg).await;
+        state.cache.tracker().set_bearing(&scope.provider, &p.id, deg).await;
       }
     }
   }
 
-  async fn load_headsigns(state: &crate::State, route_short_name: &str) -> Headsigns {
-    if let Some(cached) = Self::get_headsigns_cache(&state.cache, route_short_name).await {
+  async fn load_headsigns(state: &crate::State, scope: &Scope, route_short_name: &str) -> Headsigns {
+    if let Some(cached) =
+      Self::get_headsigns_cache(&state.cache, &scope.region, &scope.provider, route_short_name).await
+    {
       return cached;
     }
 
-    let rows = Self::query_headsigns(&state.db, route_short_name).await;
+    let rows = Self::query_headsigns(&state.db, scope, route_short_name).await;
 
     let mut hs: Headsigns = (Vec::new(), Vec::new());
     for r in rows {
@@ -254,7 +334,7 @@ impl Line {
       }
     }
 
-    Self::set_headsigns_cache(&state.cache, route_short_name, &hs).await;
+    Self::set_headsigns_cache(&state.cache, &scope.region, &scope.provider, route_short_name, &hs).await;
     hs
   }
 

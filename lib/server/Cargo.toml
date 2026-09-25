@@ -7,10 +7,13 @@ publish.workspace = true
 
 [dependencies]
 citymob-core.workspace = true
+citymob-dnt.workspace = true
 citymob-stm.workspace = true
 
 axum.workspace = true
+brotli.workspace = true
 chrono.workspace = true
+flate2.workspace = true
 dotenvy.workspace = true
 gtfs-structures.workspace = true
 redis.workspace = true

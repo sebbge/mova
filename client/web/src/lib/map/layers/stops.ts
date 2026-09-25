@@ -1,75 +1,110 @@
 import type {FeatureCollection} from 'geojson';
-import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
+import type {ExpressionSpecification, GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
+import type {StopItem} from '~/lib/api/types';
+import {comboKey, providerInfo, SERVICE_COMBOS, SERVICES, serviceOf, type Service} from '~/lib/domain/providers';
+import {STOP_PIN_PIXEL_RATIO, stopDotImage, stopPinImage} from '~/lib/map/images/stopPin';
 
-const SOURCE = 'stops';
-const BRAND = '#00b360';
+export type StopsSource = 'stops' | 'route-stops';
 
-export interface StopPoint {
-  stop_id: string;
-  stop_name: string;
-  lat: number;
-  lng: number;
+export interface StopsMarks {
+  selectedId: string | null;
+  siblings: readonly string[]; // any stop of the shelter
+  dim: boolean;
 }
 
-// geojson, dom markers kill panning at this volume
+const PIN_MIN_ZOOM = 15; // dot -> pin
+
+const OPACITY: ExpressionSpecification = ['case', ['get', 'dim'], 0.45, ['get', 'muted'], 0.75, 1];
+const ORDER: ExpressionSpecification = ['case', ['get', 'selected'], 1, 0];
+
+const imageId = (kind: 'pin' | 'dot', combo: readonly Service[], selected: boolean) =>
+  `stop-${kind}-${comboKey(combo)}${selected ? '-selected' : ''}`;
+
+const imageExpr = (kind: 'pin' | 'dot'): ExpressionSpecification => [
+  'concat',
+  `stop-${kind}-`,
+  ['coalesce', ['get', 'service'], 'urban'],
+  ['case', ['get', 'selected'], '-selected', ''],
+];
+
 export const stopsLayer = {
-  HIT: 'stops-halo',
-  LAYERS: ['stops-halo', 'stops-dot'],
+  HITS: ['route-stops-pin', 'route-stops-dot', 'stops-pin', 'stops-dot'],
 
-  add(map: MapLibreMap) {
-    if (map.getSource(SOURCE)) return;
+  addImages(map: MapLibreMap) {
+    for (const combo of SERVICE_COMBOS) {
+      for (const selected of [false, true]) {
+        const pin = imageId('pin', combo, selected);
+        const dot = imageId('dot', combo, selected);
+        if (!map.hasImage(pin)) {
+          const image = stopPinImage(selected, combo, selected ? 92 : 80);
+          if (image) map.addImage(pin, image, {pixelRatio: STOP_PIN_PIXEL_RATIO});
+        }
+        if (!map.hasImage(dot)) {
+          const image = stopDotImage(selected, combo);
+          if (image) map.addImage(dot, image, {pixelRatio: STOP_PIN_PIXEL_RATIO});
+        }
+      }
+    }
+  },
 
-    map.addSource(SOURCE, {type: 'geojson', data: features([], new Set(), null)});
+  add(map: MapLibreMap, source: StopsSource) {
+    map.addSource(source, {type: 'geojson', data: features([], {selectedId: null, siblings: [], dim: false})});
     map.addLayer({
-      id: 'stops-halo',
-      type: 'circle',
-      source: SOURCE,
-      paint: {
-        'circle-radius': [
-          'interpolate',
-          ['linear'],
-          ['zoom'],
-          12,
-          ['case', ['get', 'selected'], 7, 4],
-          18,
-          ['case', ['get', 'selected'], 14, 10],
-        ],
-        'circle-color': '#ffffff',
-        'circle-opacity': ['case', ['get', 'dim'], 0.45, 1],
-        'circle-stroke-width': ['case', ['get', 'selected'], 3, 1],
-        'circle-stroke-color': ['case', ['get', 'selected'], BRAND, 'rgba(0,0,0,0.25)'],
+      id: `${source}-dot`,
+      type: 'symbol',
+      source,
+      maxzoom: PIN_MIN_ZOOM,
+      layout: {
+        'icon-image': imageExpr('dot'),
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.7, PIN_MIN_ZOOM, 1],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'symbol-sort-key': ORDER,
       },
+      paint: {'icon-opacity': OPACITY},
     });
     map.addLayer({
-      id: 'stops-dot',
-      type: 'circle',
-      source: SOURCE,
-      paint: {
-        'circle-radius': ['interpolate', ['linear'], ['zoom'], 12, 2, 18, 5],
-        'circle-color': BRAND,
-        'circle-opacity': ['case', ['get', 'dim'], 0.45, 1],
+      id: `${source}-pin`,
+      type: 'symbol',
+      source,
+      minzoom: PIN_MIN_ZOOM,
+      layout: {
+        'icon-image': imageExpr('pin'),
+        'icon-size': ['interpolate', ['linear'], ['zoom'], PIN_MIN_ZOOM, 0.78, 18, 1],
+        'icon-allow-overlap': true,
+        'icon-ignore-placement': true,
+        'symbol-sort-key': ORDER,
       },
+      paint: {'icon-opacity': OPACITY},
     });
   },
 
-  // dim, not hidden
-  set(map: MapLibreMap, stops: StopPoint[], onRoute: Set<string>, selected: string | null) {
-    (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(features(stops, onRoute, selected));
+  set(map: MapLibreMap, source: StopsSource, stops: StopItem[], marks: StopsMarks) {
+    (map.getSource(source) as GeoJSONSource | undefined)?.setData(features(stops, marks));
   },
 };
 
-function features(stops: StopPoint[], onRoute: Set<string>, selected: string | null): FeatureCollection {
+// backend serves one point per shelter
+function features(stops: StopItem[], marks: StopsMarks): FeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: stops.map((s) => ({
-      type: 'Feature',
-      geometry: {type: 'Point', coordinates: [s.lng, s.lat]},
-      properties: {
-        stop_id: s.stop_id,
-        stop_name: s.stop_name,
-        dim: onRoute.size > 0 && !onRoute.has(s.stop_id),
-        selected: s.stop_id === selected,
-      },
-    })),
+    features: stops.map((stop) => {
+      const services = new Set(
+        stop.providers ? stop.providers.map((p) => providerInfo(p).service) : [serviceOf(stop.id)]
+      );
+      const selected = stop.id === marks.selectedId || marks.siblings.includes(stop.id);
+      return {
+        type: 'Feature' as const,
+        geometry: {type: 'Point' as const, coordinates: [stop.lng, stop.lat]},
+        properties: {
+          stop_id: stop.id,
+          stop_name: stop.name,
+          service: comboKey(SERVICES.filter((s) => services.has(s))),
+          dim: marks.dim && !selected,
+          muted: marks.selectedId != null && !selected,
+          selected,
+        },
+      };
+    }),
   };
 }

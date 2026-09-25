@@ -1,52 +1,98 @@
 use citymob_core as core;
+use citymob_dnt as dnt;
 use citymob_stm as stm;
 
 mod cache;
 mod domain;
+mod error;
 mod helpers;
 mod tasks;
 
 use self::cache::Cache;
-use self::core::{Error, Result, provider::Provider};
+use self::core::provider::Provider;
+use self::domain::scope::Scope;
 use self::domain::{handlers, middleware};
+pub use self::error::{Error, Result};
 
 use std::sync::Arc;
 
 pub type Res<T> = Result<axum::Json<T>>;
 pub type Db = sqlx::PgPool;
-pub type GtfsVersion = Arc<tokio::sync::RwLock<String>>;
+
+pub type GtfsVersions = Arc<tokio::sync::RwLock<std::collections::BTreeMap<String, String>>>;
+
+pub fn versions_token(versions: &std::collections::BTreeMap<String, String>) -> String {
+  if versions.is_empty() {
+    return "none".into();
+  }
+  versions.iter().map(|(p, v)| format!("{p}={v}")).collect::<Vec<_>>().join(";")
+}
 
 struct Server {
-  provider: Arc<dyn Provider>,
+  providers: Vec<Arc<Provider>>,
   db: Db,
+  tasks_db: Db,
   cache: Cache,
-  gtfs_version: GtfsVersion,
+  gtfs_versions: GtfsVersions,
   rebuild_webhook: Option<String>,
 }
 impl Server {
-  pub fn router(gtfs_version: GtfsVersion) -> axum::Router<State> {
+  pub fn scopes(&self) -> impl Iterator<Item = Scope> + '_ {
+    self.providers.iter().cloned().map(Scope::new)
+  }
+
+  pub fn handles(&self) -> Vec<Arc<Provider>> {
+    self.providers.clone()
+  }
+
+  pub fn priority(&self) -> Vec<String> {
+    self.providers.iter().map(|p| p.id.to_string()).collect()
+  }
+
+  pub fn resolve(&self, provider: &str) -> Result<Scope> {
+    let handle = self
+      .providers
+      .iter()
+      .find(|p| p.id == provider)
+      .ok_or_else(|| Error::NotFound(format!("unknown provider: {provider}")))?;
+    Ok(Scope::new(handle.clone()))
+  }
+
+  pub fn region(&self) -> Result<String> {
+    let mut regions: Vec<_> = self.providers.iter().map(|p| p.authority).collect();
+    regions.sort_unstable();
+    regions.dedup();
+
+    match regions.as_slice() {
+      [only] => Ok(only.id().to_string()),
+      [] => Err(Error::NotFound("no providers loaded".into())),
+      _ => Err(Error::BadRequest("several regions loaded: specify one".into())),
+    }
+  }
+
+  pub fn router(state: State) -> axum::Router<State> {
     use axum::routing::get;
 
     // GTFS
     let gtfs = axum::Router::new()
       .route("/stops", get(handlers::stop::list))
-      .route("/stops/nearby", get(handlers::nearby_stops::nearby))
-      .route("/stops/{stop_id}", get(handlers::stop::stop))
+      .route("/stop/{provider}/{id}", get(handlers::stop::stop))
       .route("/routes", get(handlers::routes::list))
       .route("/routes/search", get(handlers::routes::search))
-      .route("/routes/{line_id}/shape", get(handlers::routes::shape))
-      .layer(axum::middleware::from_fn_with_state(gtfs_version.clone(), middleware::gtfs_cache));
+      .route("/route/shape/{provider}/{id}", get(handlers::routes::shape))
+      .route("/shape/{provider}/{id}", get(handlers::routes::variant))
+      .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::gtfs_cache));
 
     // GTFS
     let schedule = axum::Router::new()
-      .route("/stops/{stop_id}/schedule", get(handlers::stop::schedule))
-      .layer(axum::middleware::from_fn_with_state(gtfs_version, middleware::gtfs_daily_cache));
+      .route("/stop/schedule/{provider}/{id}", get(handlers::stop::schedule))
+      .layer(axum::middleware::from_fn_with_state(state.gtfs_versions.clone(), middleware::gtfs_daily_cache));
 
     // realtime
     let realtime = axum::Router::new()
       .route("/health", get(handlers::health::health))
-      .route("/stops/{stop_id}/arrivals", get(handlers::stop::arrivals))
-      .route("/lines/{line_id}", get(handlers::line::buses));
+      .route("/stop/arrivals/{provider}/{id}", get(handlers::stop::arrivals))
+      .route("/line/buses/{provider}/{id}", get(handlers::line::buses));
 
     gtfs.merge(schedule).merge(realtime)
   }
@@ -58,10 +104,10 @@ impl Server {
 
     match reqwest::Client::new().post(url).send().await {
       Ok(res) if res.status().is_success() => {
-        tracing::info!(status = res.status().as_u16(), "[GTFS] web rebuild")
+        tracing::info!(status = res.status().as_u16(), "[gtfs] web rebuild")
       }
-      Ok(res) => tracing::warn!(status = res.status().as_u16(), "[GTFS] webhook non-2xx"),
-      Err(e) => tracing::warn!(error = %e, "[GTFS] couldnt rebuild"),
+      Ok(res) => tracing::warn!(status = res.status().as_u16(), "[gtfs] webhook non-2xx"),
+      Err(e) => tracing::warn!(error = %e, "[gtfs] couldn't rebuild"),
     }
   }
 }
@@ -86,12 +132,19 @@ impl State {
       .expect("failed to connect to database");
     sqlx::migrate!().run(&postgres).await.expect("failed to run migrations");
 
-    let version: Option<String> = sqlx::query_scalar("SELECT version FROM gtfs_metadata WHERE id = 1")
-      .fetch_optional(&postgres)
+    let tasks_db = {
+      use sqlx::ConnectOptions;
+      let options = (*postgres.connect_options())
+        .clone()
+        .log_slow_statements(tracing::log::LevelFilter::Warn, std::time::Duration::from_secs(30));
+      sqlx::postgres::PgPoolOptions::new().max_connections(2).connect_lazy_with(options)
+    };
+
+    let versions: Vec<(String, String)> = sqlx::query_as("SELECT provider, version FROM gtfs_metadata")
+      .fetch_all(&postgres)
       .await
-      .ok()
-      .flatten();
-    let gtfs_version = Arc::new(tokio::sync::RwLock::new(version.unwrap_or_else(|| "none".into())));
+      .expect("failed to read gtfs versions");
+    let gtfs_versions = Arc::new(tokio::sync::RwLock::new(versions.into_iter().collect()));
 
     let redis = redis::Client::open(redis_url)
       .expect("invalid REDIS_URL")
@@ -100,43 +153,61 @@ impl State {
       .expect("failed to connect to Redis");
     let cache = Cache::new(redis, sync);
 
-    #[cfg(debug_assertions)]
-    {
-      // DEBUG: force cache cold start
-      use cache::Flush;
-      cache.flush().await;
+    let providers: Vec<Arc<Provider>> = vec![
+      Arc::new(stm::provider(stm_config()).expect("stm: invalid config")),
+      Arc::new(dnt::provider().expect("dnt: invalid config")),
+    ];
+
+    for provider in &providers {
+      tracing::info!(provider = provider.id, authority = %provider.authority, regions = ?provider.regions, "[bootstrap] loaded");
+
+      #[cfg(debug_assertions)]
+      {
+        // DEBUG: force cache cold start
+        use cache::Flush;
+        cache.flush_region(provider.authority).await;
+      }
     }
 
-    let provider: Arc<dyn Provider> = Arc::new(stm::Stm::new().expect("stm: configuracion invalida"));
-
-    State(Arc::new(Server { provider, db: postgres, cache, gtfs_version, rebuild_webhook }))
+    State(Arc::new(Server { providers, db: postgres, tasks_db, cache, gtfs_versions, rebuild_webhook }))
   }
 }
 
-/// Required in release
+fn stm_config() -> stm::StmConfig {
+  let var = |key: &str| std::env::var(key).unwrap_or_default();
+  stm::StmConfig {
+    api_url: var("IM_API_URL"),
+    auth_url: var("IM_AUTH_URL"),
+    client_id: var("IM_CLIENT_ID"),
+    client_secret: var("IM_CLIENT_SECRET"),
+  }
+}
+
 fn cors_layer() -> tower_http::cors::CorsLayer {
   use axum::http::{HeaderValue, Method};
   use tower_http::cors::CorsLayer;
+
+  if cfg!(debug_assertions) {
+    tracing::warn!("[cors] all origins (debug)");
+    return CorsLayer::permissive();
+  }
 
   let raw = std::env::var("CORS_ORIGINS").unwrap_or_default();
   let origins: Vec<HeaderValue> =
     raw.split(',').map(str::trim).filter(|o| !o.is_empty()).filter_map(|o| o.parse().ok()).collect();
 
   if origins.is_empty() {
-    if cfg!(debug_assertions) {
-      tracing::warn!("CORS_ORIGINS sin definir: se permite cualquier origen (solo en debug)");
-      return CorsLayer::permissive();
-    }
     panic!("CORS_ORIGINS must be set");
   }
 
-  tracing::info!(count = origins.len(), "CORS restringido");
+  tracing::info!(count = origins.len(), "[cors] origins restricted");
   CorsLayer::new().allow_origin(origins).allow_methods([Method::GET])
 }
 
 #[allow(clippy::unwrap_used)]
 #[tokio::main]
 async fn main() {
+  use tower_http::compression::CompressionLayer;
   use tower_http::trace::TraceLayer;
 
   {
@@ -156,11 +227,14 @@ async fn main() {
   let state = State::build().await;
   tasks::spawn(&state);
 
-  let app =
-    Server::router(state.gtfs_version.clone()).layer(TraceLayer::new_for_http()).layer(cors_layer()).with_state(state);
+  let app = Server::router(state.clone())
+    .layer(TraceLayer::new_for_http())
+    .layer(CompressionLayer::new())
+    .layer(cors_layer())
+    .with_state(state);
 
   let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-  tracing::info!("listening on {}", listener.local_addr().unwrap());
+  tracing::info!(addr = %listener.local_addr().unwrap(), "[bootstrap] listening");
   axum::serve(listener, app).await.unwrap();
 }
 

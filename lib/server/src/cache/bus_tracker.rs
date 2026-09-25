@@ -5,7 +5,10 @@ use crate::domain::entities::{
 };
 
 use std::collections::{HashMap, HashSet};
-use tokio::sync::RwLock;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
+use tokio::sync::{Notify, RwLock};
+use tokio::time::Instant;
 
 #[derive(Clone)]
 pub struct StopGhost {
@@ -13,41 +16,78 @@ pub struct StopGhost {
   pub line: String,
 }
 
+/// Buses keyed by provider, stops by region
+pub fn bus_key(provider: &str, bus_id: &str) -> String {
+  format!("{provider}:{bus_id}")
+}
+
+pub fn split_bus_key(key: &str) -> Option<(&str, &str)> {
+  key.split_once(':')
+}
+
+fn stop_key(region: &str, stop_id: &str) -> String {
+  format!("{region}:{stop_id}")
+}
+
+pub struct FleetView {
+  pub at: Instant,
+  pub by_line: HashMap<String, Vec<Bus>>,
+}
+
 pub struct BusTracker {
-  pub buses: RwLock<HashMap<String, Bus>>,
+  buses: RwLock<HashMap<String, Bus>>,
   stops: RwLock<HashMap<String, HashMap<String, StopGhost>>>,
+  views: RwLock<HashMap<String, Arc<FleetView>>>,
+  demand: Mutex<HashMap<String, Instant>>,
+  demanded: Notify,
+  published: Notify,
 }
 
 impl BusTracker {
   pub fn new() -> Self {
-    Self { buses: RwLock::new(HashMap::new()), stops: RwLock::new(HashMap::new()) }
+    Self {
+      buses: RwLock::default(),
+      stops: RwLock::default(),
+      views: RwLock::default(),
+      demand: Mutex::default(),
+      demanded: Notify::new(),
+      published: Notify::new(),
+    }
   }
 
-  pub async fn get(&self, bus_id: &str) -> Option<Bus> {
-    self.buses.read().await.get(bus_id).cloned()
+  pub async fn get(&self, provider: &str, bus_id: &str) -> Option<Bus> {
+    self.buses.read().await.get(&bus_key(provider, bus_id)).cloned()
   }
 
-  pub async fn missing_ids(&self, line: &str, seen_ids: &HashSet<String>) -> Vec<String> {
+  /// Raw ids
+  pub async fn missing_ids(&self, provider: &str, line: Option<&str>, seen_ids: &HashSet<String>) -> Vec<String> {
+    let prefix = format!("{provider}:");
     self
       .buses
       .read()
       .await
       .iter()
-      .filter(|(id, entry)| !seen_ids.contains(id.as_str()) && entry.line == line)
-      .map(|(id, _)| id.clone())
+      .filter_map(|(key, entry)| key.strip_prefix(&prefix).map(|raw| (raw, entry)))
+      .filter(|(raw, entry)| !seen_ids.contains(*raw) && line.is_none_or(|line| entry.line == line))
+      .map(|(raw, _)| raw.to_string())
       .collect()
   }
 
-  pub async fn mark_seen(&self, bus_id: &str) {
+  pub async fn upsert(&self, provider: &str, bus_id: &str, bus: Bus) -> Option<Bus> {
+    self.buses.write().await.insert(bus_key(provider, bus_id), bus)
+  }
+
+  pub async fn mark_seen(&self, provider: &str, bus_id: &str) {
     let mut map = self.buses.write().await;
     let now = chrono::Utc::now().timestamp();
     map
-      .entry(bus_id.to_string())
+      .entry(bus_key(provider, bus_id))
       .and_modify(|e| {
         e.last_seen_epoch = now;
       })
       .or_insert(Bus {
         id: bus_id.to_string(),
+        unit: String::new(),
         line: String::new(),
         location: Point { lat: 0.0, lng: 0.0 },
         bearing_deg: None,
@@ -56,6 +96,7 @@ impl BusTracker {
         destination: None,
         company: String::new(),
         headsign: None,
+        shape_id: None,
         timestamp: None,
         still: false,
         speed: 0.0,
@@ -63,48 +104,109 @@ impl BusTracker {
         access: None,
         emissions: None,
         thermal_comfort: None,
+        delay_min: None,
         stale_count: 0,
         last_seen_epoch: now,
       });
   }
 
-  pub async fn missing(&self, bus_id: &str) -> Option<(BusFreshness, i64)> {
+  pub async fn missing(&self, provider: &str, bus_id: &str) -> Option<(BusFreshness, i64)> {
+    let key = bus_key(provider, bus_id);
     let mut map = self.buses.write().await;
-    let entry = map.get_mut(bus_id)?;
+    let entry = map.get_mut(&key)?;
     match BusFreshness::from_missing_s(chrono::Utc::now().timestamp() - entry.last_seen_epoch) {
       Some(f) => Some((f, entry.last_seen_epoch)),
       None => {
-        map.remove(bus_id);
+        map.remove(&key);
         None
       }
     }
   }
 
-  pub async fn remove(&self, bus_id: &str) {
-    self.buses.write().await.remove(bus_id);
+  pub async fn remove(&self, provider: &str, bus_id: &str) {
+    self.buses.write().await.remove(&bus_key(provider, bus_id));
   }
 
-  pub async fn set_bearing(&self, bus_id: &str, bearing: f64) {
-    if let Some(entry) = self.buses.write().await.get_mut(bus_id) {
+  pub async fn forget(&self, provider: &str) {
+    let prefix = format!("{provider}:");
+    self.buses.write().await.retain(|key, _| !key.starts_with(&prefix));
+  }
+
+  pub async fn set_bearing(&self, provider: &str, bus_id: &str, bearing: f64) {
+    if let Some(entry) = self.buses.write().await.get_mut(&bus_key(provider, bus_id)) {
       entry.bearing_deg = Some(bearing);
     }
   }
 
-  pub async fn stop_ghosts(&self, stop_id: &str) -> HashMap<String, StopGhost> {
-    self.stops.read().await.get(stop_id).cloned().unwrap_or_default()
+  /// Keyed by `bus_key`
+  pub async fn stop_ghosts(&self, region: &str, stop_id: &str) -> HashMap<String, StopGhost> {
+    self.stops.read().await.get(&stop_key(region, stop_id)).cloned().unwrap_or_default()
   }
 
-  pub async fn set_stop_ghost(&self, stop_id: &str, bus_id: &str, ghost: StopGhost) {
-    self.stops.write().await.entry(stop_id.to_string()).or_default().insert(bus_id.to_string(), ghost);
+  pub async fn set_stop_ghost(&self, region: &str, stop_id: &str, bus: &str, ghost: StopGhost) {
+    self.stops.write().await.entry(stop_key(region, stop_id)).or_default().insert(bus.to_string(), ghost);
   }
 
-  pub async fn remove_stop_ghost(&self, stop_id: &str, bus_id: &str) {
+  pub async fn remove_stop_ghost(&self, region: &str, stop_id: &str, bus: &str) {
     let mut map = self.stops.write().await;
-    if let Some(inner) = map.get_mut(stop_id) {
-      inner.remove(bus_id);
+    let key = stop_key(region, stop_id);
+    if let Some(inner) = map.get_mut(&key) {
+      inner.remove(bus);
       if inner.is_empty() {
-        map.remove(stop_id);
+        map.remove(&key);
       }
     }
+  }
+
+  //# fleet
+  pub fn touch(&self, provider: &str) {
+    if let Ok(mut demand) = self.demand.lock() {
+      demand.insert(provider.to_string(), Instant::now());
+    }
+    self.demanded.notify_waiters();
+  }
+
+  pub fn demanded(&self, provider: &str, window: Duration) -> bool {
+    let Ok(demand) = self.demand.lock() else {
+      return true;
+    };
+    demand.get(provider).is_some_and(|at| at.elapsed() < window)
+  }
+
+  pub async fn await_demand(&self, provider: &str, window: Duration) {
+    loop {
+      let notified = self.demanded.notified();
+      tokio::pin!(notified);
+      notified.as_mut().enable();
+      if self.demanded(provider, window) {
+        return;
+      }
+      notified.await;
+    }
+  }
+
+  pub async fn view(&self, provider: &str, max_age: Duration) -> Option<Arc<FleetView>> {
+    self.views.read().await.get(provider).filter(|view| view.at.elapsed() < max_age).cloned()
+  }
+
+  pub async fn wait_view(&self, provider: &str, max_age: Duration, timeout: Duration) -> Option<Arc<FleetView>> {
+    let deadline = Instant::now() + timeout;
+    loop {
+      let notified = self.published.notified();
+      tokio::pin!(notified);
+      notified.as_mut().enable();
+      if let Some(view) = self.view(provider, max_age).await {
+        return Some(view);
+      }
+      if tokio::time::timeout_at(deadline, notified).await.is_err() {
+        return None;
+      }
+    }
+  }
+
+  pub async fn publish(&self, provider: &str, by_line: HashMap<String, Vec<Bus>>) {
+    let view = Arc::new(FleetView { at: Instant::now(), by_line });
+    self.views.write().await.insert(provider.to_string(), view);
+    self.published.notify_waiters();
   }
 }

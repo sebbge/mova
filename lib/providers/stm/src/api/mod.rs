@@ -1,169 +1,231 @@
 // https://api.montevideo.gub.uy/apidocs/publictransport
 mod auth;
 pub mod models;
-use self::auth::ImAuthClient;
+pub mod online;
+use self::auth::StmAuth;
 use self::models::{StmLineBus, StmUpcomingBus};
+use crate::core::limiter::{Limiter, Priority};
+use crate::core::{Error, Result, http};
 
+use reqwest::{RequestBuilder, Response, StatusCode};
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use tokio::sync::OnceCell;
+
+fn decode_each<T: serde::de::DeserializeOwned>(bytes: &[u8], url: &str, tag: &str) -> Result<Vec<T>> {
+  let raw: Vec<serde_json::Value> = serde_json::from_slice(bytes).map_err(|e| {
+    let snippet = String::from_utf8_lossy(&bytes[..bytes.len().min(300)]);
+    tracing::error!(url = %url, error = %e, body = %snippet, "{tag} JSON decode failed");
+    Error::External(format!("JSON decode at {url}: {e}"))
+  })?;
+
+  let total = raw.len();
+  let mut first_error = None;
+  let items: Vec<T> = raw
+    .into_iter()
+    .filter_map(|item| match T::deserialize(&item) {
+      Ok(parsed) => Some(parsed),
+      Err(e) => {
+        first_error.get_or_insert_with(|| format!("{e}: {item}"));
+        None
+      }
+    })
+    .collect();
+
+  if let Some(error) = first_error {
+    tracing::warn!(url = %url, dropped = total - items.len(), error = %error, "{tag} malformed buses dropped");
+  }
+  Ok(items)
+}
+
+fn by_line<T>(items: Vec<T>, lines: &[String], line: impl Fn(&T) -> &str, tag: &str) -> HashMap<String, Vec<T>> {
+  let requested: HashSet<&str> = lines.iter().map(String::as_str).collect();
+
+  let mut by_line: HashMap<String, Vec<T>> = HashMap::new();
+  let mut dropped = 0;
+  for item in items {
+    let key = line(&item).to_owned();
+    if requested.contains(key.as_str()) {
+      by_line.entry(key).or_default().push(item);
+    } else {
+      dropped += 1;
+    }
+  }
+
+  if dropped > 0 {
+    tracing::warn!(dropped, "{tag} line filter ignored");
+  }
+  by_line
+}
 
 pub struct StmApi {
   http: reqwest::Client,
   url: String,
-  auth: ImAuthClient,
+  auth: StmAuth,
+  limiter: Limiter,
+  upcoming: Mutex<HashMap<String, (Instant, UpcomingCell)>>,
+  rejected: Mutex<HashMap<(String, String), Instant>>,
 }
 impl StmApi {
-  #[allow(clippy::expect_used)]
-  pub fn new(url: String, auth_url: String, client_id: String, client_secret: String) -> Self {
-    let _ = rustls::crypto::ring::default_provider().install_default();
+  const CAPACITY: u32 = 6;
+  const REFILL: Duration = Duration::from_secs(5);
+  const RETRY_AFTER: Duration = Duration::from_secs(30);
 
-    let http = reqwest::Client::builder()
-      .timeout(std::time::Duration::from_secs(12))
-      .build()
-      .expect("failed to build HTTP client");
-    let auth = ImAuthClient::new(auth_url, client_id, client_secret);
-    Self { http, url, auth }
+  pub fn new(url: String, auth_url: String, client_id: String, client_secret: String) -> Result<Self> {
+    let http = http::client(Duration::from_secs(12))?;
+    let auth = StmAuth::new(auth_url, client_id, client_secret);
+    let limiter = Limiter::new(Self::CAPACITY, Self::REFILL);
+    Ok(Self { http, url, auth, limiter, upcoming: Mutex::default(), rejected: Mutex::default() })
+  }
+
+  async fn send(&self, req: RequestBuilder, tag: &str, priority: Priority) -> Result<Response> {
+    if let Err(e) = self.limiter.acquire(priority).await {
+      tracing::debug!(source = tag, "[stm/limit] request throttled");
+      return Err(e);
+    }
+    let res = http::send(req, tag).await?;
+    if res.status() == StatusCode::TOO_MANY_REQUESTS {
+      let pause = http::retry_after(&res).unwrap_or(Self::RETRY_AFTER);
+      tracing::debug!(source = tag, secs = pause.as_secs(), "[stm/limit] paused");
+      self.limiter.penalize(pause);
+    }
+    Ok(res)
+  }
+
+  async fn get(&self, url: &str, tag: &str, priority: Priority) -> Result<Response> {
+    let token = self.auth.token(&self.http).await?;
+    self.send(self.http.get(url).bearer_auth(&token), tag, priority).await
   }
 }
 
 //# GET <MVD>/buses/busstops/{stop_id}/upcomingbuses?lines={lines}&amountperline=3
 // - upcoming buses
 
-pub type ImUpcomingLines = HashMap<String, Vec<StmUpcomingBus>>;
+pub type StmUpcomingLines = HashMap<String, Vec<StmUpcomingBus>>;
+type UpcomingCell = Arc<OnceCell<StmUpcomingLines>>;
 impl StmApi {
-  async fn upcoming_chunk(&self, stop_id: &str, lines: &[String]) -> crate::core::Result<Vec<StmUpcomingBus>> {
-    let url =
-      format!("{}/buses/busstops/{}/upcomingbuses?lines={}&amountperline=3", self.url, stop_id, lines.join(","));
-
-    let token = self.auth.token(&self.http).await?;
-    let res = match self.http.get(&url).bearer_auth(&token).send().await {
-      Ok(res) => res,
-      Err(e) => {
-        tracing::warn!(error = %e, url = %url, "[MVD/upcomingbuses] request failed");
-        return Err(e.into());
-      }
-    };
-
-    let status = res.status();
-    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-      tracing::warn!(url = %url, "[MVD/upcomingbuses] rate limited (429)");
-      return Err(crate::core::Error::RateLimited);
-    }
-    if !status.is_success() {
-      let body = res.text().await.unwrap_or_default();
-      tracing::warn!(status = status.as_u16(), url = %url, body = %body, "[MVD/upcomingbuses] non-2xx");
-      return Err(crate::core::Error::External(format!("{status} at {url}")));
-    }
-
-    Ok(res.json().await.unwrap_or_default())
-  }
-}
-impl StmApi {
+  const REJECTED_TTL: Duration = Duration::from_secs(3600);
+  const UPCOMING_TTL: Duration = Duration::from_secs(20);
   const UPCOMING_CHUNK: usize = 8;
   const UPCOMING_CONCURRENCY: usize = 3;
 
-  pub async fn upcoming_lines(&self, stop_id: &str, lines: &[String]) -> crate::core::Result<ImUpcomingLines> {
+  async fn fetch_upcoming(&self, stop_id: &str, lines: &[String]) -> Result<Option<Vec<StmUpcomingBus>>> {
+    let url =
+      format!("{}/buses/busstops/{}/upcomingbuses?lines={}&amountperline=3", self.url, stop_id, lines.join(","));
+
+    let res = self.get(&url, "[stm/upcoming]", Priority::Interactive).await?;
+    if res.status() == StatusCode::BAD_REQUEST {
+      return Ok(None);
+    }
+    let res = http::ok(res, "[stm/upcoming]").await?;
+
+    let bytes = http::bytes(res, "[stm/upcoming]").await?;
+    let mut upcoming: Vec<StmUpcomingBus> = decode_each(&bytes, &url, "[stm/upcoming]")?;
+    if let [line] = lines {
+      for u in upcoming.iter_mut().filter(|u| u.bus.line.is_empty()) {
+        u.bus.line.clone_from(line);
+      }
+    }
+    Ok(Some(upcoming))
+  }
+
+  async fn upcoming_chunk(&self, stop_id: &str, lines: &[String]) -> Result<Vec<StmUpcomingBus>> {
+    if let Some(upcoming) = self.fetch_upcoming(stop_id, lines).await? {
+      return Ok(upcoming);
+    }
+
+    let [line] = lines else {
+      let (left, right) = lines.split_at(lines.len() / 2);
+      let mut upcoming = Box::pin(self.upcoming_chunk(stop_id, left)).await?;
+      upcoming.extend(Box::pin(self.upcoming_chunk(stop_id, right)).await?);
+      return Ok(upcoming);
+    };
+
+    tracing::warn!(stop = stop_id, line = %line, "[stm/upcoming] line rejected (400)");
+    if let Ok(mut rejected) = self.rejected.lock() {
+      rejected.insert((stop_id.to_owned(), line.clone()), Instant::now());
+    }
+    Ok(Vec::new())
+  }
+
+  fn accepted(&self, stop_id: &str, lines: &[String]) -> Vec<String> {
+    let Ok(mut rejected) = self.rejected.lock() else {
+      return lines.to_vec();
+    };
+    rejected.retain(|_, at| at.elapsed() < Self::REJECTED_TTL);
+    lines.iter().filter(|line| !rejected.contains_key(&(stop_id.to_owned(), (*line).clone()))).cloned().collect()
+  }
+
+  async fn load_upcoming(&self, stop_id: &str, lines: &[String]) -> Result<StmUpcomingLines> {
     use futures_util::StreamExt;
 
-    let pending: Vec<_> = lines.chunks(Self::UPCOMING_CHUNK).map(|chunk| self.upcoming_chunk(stop_id, chunk)).collect();
-    let total = pending.len();
+    let accepted = self.accepted(stop_id, lines);
+    let pending: Vec<_> =
+      accepted.chunks(Self::UPCOMING_CHUNK).map(|chunk| self.upcoming_chunk(stop_id, chunk)).collect();
+    let chunks = pending.len();
 
     let results: Vec<_> =
       futures_util::stream::iter(pending).buffer_unordered(Self::UPCOMING_CONCURRENCY).collect().await;
 
-    let requested: HashSet<&str> = lines.iter().map(String::as_str).collect();
-
-    let mut by_line = ImUpcomingLines::new();
+    let mut upcoming = Vec::new();
     let mut failed = 0;
-    let mut buses = 0;
-    let mut ignored = 0;
     for result in results {
       match result {
-        Ok(upcomings) => {
-          buses += upcomings.len();
-          for u in upcomings {
-            if requested.contains(u.bus.line.as_str()) {
-              by_line.entry(u.bus.line.clone()).or_default().push(u);
-            } else {
-              ignored += 1;
-            }
-          }
-        }
+        Ok(buses) => upcoming.extend(buses),
         Err(_) => failed += 1,
       }
     }
 
-    if ignored > 0 {
-      tracing::warn!(stop = stop_id, descartados = ignored, "[MVD/upcomingbuses] ignored filter");
+    if failed == chunks && chunks > 0 {
+      return Err(Error::External(format!("upcomingbuses failed for stop {stop_id}")));
     }
 
-    if failed == total && total > 0 {
-      return Err(crate::core::Error::External(format!("upcomingbuses failed for stop {stop_id}")));
-    }
+    tracing::info!(stop = stop_id, lines = lines.len(), chunks, failed, buses = upcoming.len(), "[stm/upcoming] OK");
+    Ok(by_line(upcoming, lines, |u| &u.bus.line, "[stm/upcoming]"))
+  }
 
-    tracing::info!(
-      stop = stop_id,
-      lines = lines.len(),
-      chunks = total,
-      failed = failed,
-      buses = buses,
-      "[MVD/upcomingbuses] OK"
-    );
-    Ok(by_line)
+  fn upcoming_cell(&self, stop_id: &str) -> UpcomingCell {
+    let Ok(mut cells) = self.upcoming.lock() else {
+      return Arc::default();
+    };
+    cells.retain(|_, (at, _)| at.elapsed() < Self::UPCOMING_TTL);
+    cells.entry(stop_id.to_owned()).or_insert_with(|| (Instant::now(), Arc::default())).1.clone()
+  }
+
+  fn forget_upcoming(&self, stop_id: &str, cell: &UpcomingCell) {
+    if let Ok(mut cells) = self.upcoming.lock()
+      && cells.get(stop_id).is_some_and(|(_, c)| Arc::ptr_eq(c, cell))
+    {
+      cells.remove(stop_id);
+    }
+  }
+
+  pub async fn upcoming_lines(&self, stop_id: &str, lines: &[String]) -> Result<StmUpcomingLines> {
+    let cell = self.upcoming_cell(stop_id);
+    let upcoming = cell.get_or_try_init(|| self.load_upcoming(stop_id, lines)).await.cloned();
+    if upcoming.is_err() {
+      self.forget_upcoming(stop_id, &cell);
+    }
+    upcoming
   }
 }
 
-//# GET <MVD>/buses?lines={lines}
-// - realtime location & ETA
-pub type ImLines = HashMap<String, Vec<StmLineBus>>;
+//# GET <MVD>/buses
+// - whole fleet: realtime location
 impl StmApi {
-  pub async fn lines(&self, lines: &[String]) -> crate::core::Result<ImLines> {
-    let url = format!("{}/buses?lines={}", self.url, lines.join(","));
-    let token = self.auth.token(&self.http).await?;
+  pub async fn fleet(&self) -> Result<Vec<StmLineBus>> {
+    let url = format!("{}/buses", self.url);
+    let res = http::ok(self.get(&url, "[stm/buses]", Priority::Background).await?, "[stm/buses]").await?;
+    let bytes = http::bytes(res, "[stm/buses]").await?;
+    let fleet: Vec<StmLineBus> = decode_each(&bytes, &url, "[stm/buses]")?;
 
-    let res = self.http.get(&url).bearer_auth(&token).send().await?;
-    let status = res.status();
+    tracing::info!(buses = fleet.len(), "[stm/buses] OK");
+    Ok(fleet)
+  }
 
-    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-      tracing::warn!(url = %url, "[MVD/buses] rate limited (429)");
-      return Err(crate::core::Error::RateLimited);
-    }
-
-    if !status.is_success() {
-      let body = res.text().await.unwrap_or_default();
-      tracing::warn!(status = status.as_u16(), url = %url, body = %body, "[MVD/buses] non-2xx");
-      return Ok(ImLines::new());
-    }
-
-    let bytes = res.bytes().await.map_err(|e| {
-      tracing::error!(url = %url, error = %e, "[MVD/buses] failed to read response body");
-      crate::core::Error::External(format!("body read error at {url}: {e}"))
-    })?;
-
-    let flat: Vec<StmLineBus> = serde_json::from_slice(&bytes).map_err(|e| {
-      let snippet = String::from_utf8_lossy(&bytes[..bytes.len().min(300)]);
-      tracing::error!(url = %url, error = %e, body = %snippet, "[MVD/buses] JSON decode failed");
-      crate::core::Error::External(format!("JSON decode at {url}: {e}"))
-    })?;
-
-    tracing::info!(lines = lines.len(), buses = flat.len(), "[MVD/buses] OK");
-
-    let requested: HashSet<&str> = lines.iter().map(String::as_str).collect();
-
-    let mut by_line = ImLines::new();
-    let mut ignored = 0;
-    for bus in flat {
-      if requested.contains(bus.bus.line.as_str()) {
-        by_line.entry(bus.bus.line.clone()).or_default().push(bus);
-      } else {
-        ignored += 1;
-      }
-    }
-
-    if ignored > 0 {
-      tracing::warn!(descartados = ignored, "[MVD/upcomingbuses] ignored filter");
-    }
-
-    Ok(by_line)
+  pub async fn online(&self) -> Result<Vec<online::OnlineBus>> {
+    online::buses(&self.http).await
   }
 }
 
@@ -173,58 +235,16 @@ impl StmApi {
 impl StmApi {
   const GTFS_URL: &str = "/buses/gtfs/static/latest";
 
-  pub async fn gtfs_version(&self) -> crate::core::Result<String> {
-    let token = self.auth.token(&self.http).await?;
+  pub async fn gtfs_version(&self) -> Result<String> {
     let url = format!("{}{}/version.txt", self.url, Self::GTFS_URL);
-
-    let res = self
-      .http
-      .get(&url)
-      .bearer_auth(&token)
-      .send()
-      .await
-      .map_err(|e| crate::core::Error::External(format!("GTFS version request failed: {e}")))?;
-
-    if !res.status().is_success() {
-      return Err(crate::core::Error::External(format!("GTFS version returned HTTP {}", res.status())));
-    }
-
-    let version =
-      res.text().await.map_err(|e| crate::core::Error::External(format!("GTFS version read failed: {e}")))?;
+    let res = http::ok(self.get(&url, "[stm/gtfs]", Priority::Background).await?, "[stm/gtfs]").await?;
+    let version = res.text().await?;
     Ok(version.trim().to_string())
   }
 
-  pub async fn gtfs_download(&self) -> crate::core::Result<Vec<u8>> {
-    let token = self.auth.token(&self.http).await?;
+  pub async fn gtfs_download(&self) -> Result<Vec<u8>> {
     let url = format!("{}{}/google_transit.zip", self.url, Self::GTFS_URL);
-
-    let res = self
-      .http
-      .get(&url)
-      .bearer_auth(&token)
-      .send()
-      .await
-      .map_err(|e| crate::core::Error::External(format!("GTFS ZIP request failed: {e}")))?;
-
-    if !res.status().is_success() {
-      return Err(crate::core::Error::External(format!("GTFS ZIP download returned HTTP {}", res.status())));
-    }
-
-    res.bytes().await.map(|b| b.to_vec()).map_err(|e| crate::core::Error::External(format!("ZIP read failed: {e}")))
-  }
-}
-
-//# GET <MVD>/buses?lines={test_line}
-// - realtime API health
-impl StmApi {
-  pub async fn probe(&self) -> bool {
-    let Ok(token) = self.auth.token(&self.http).await else {
-      return false;
-    };
-    let url = format!("{}/buses?lines=151", self.url);
-    match self.http.get(&url).bearer_auth(token).send().await {
-      Ok(resp) => resp.status().is_success() || resp.status().as_u16() < 500,
-      _ => false,
-    }
+    let res = http::ok(self.get(&url, "[stm/gtfs]", Priority::Background).await?, "[stm/gtfs]").await?;
+    http::bytes(res, "[stm/gtfs]").await
   }
 }

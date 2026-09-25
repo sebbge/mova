@@ -91,7 +91,7 @@ fn render_hit(md: &mut String, r: &Hit) -> std::fmt::Result {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-  dotenvy::dotenv().ok();
+  dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
 
   let base =
     std::env::var("IM_API_URL").unwrap_or_else(|_| "https://api.montevideo.gub.uy/api/transportepublico".into());

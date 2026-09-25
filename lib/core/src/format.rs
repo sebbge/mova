@@ -9,7 +9,10 @@ pub fn sentence_case(s: &str) -> String {
   }
 }
 
-/// Title case with lowercase Spanish particles
+pub fn line_name(raw: &str) -> String {
+  raw.trim().to_uppercase()
+}
+
 pub fn place_name(raw: &str) -> String {
   raw.split_whitespace().enumerate().map(|(i, word)| normalize_word(word, i == 0)).collect::<Vec<_>>().join(" ")
 }
@@ -37,7 +40,14 @@ fn normalize_word(word: &str, first: bool) -> String {
 
 #[cfg(test)]
 mod tests {
-  use super::place_name;
+  use super::{line_name, place_name};
+
+  #[test]
+  fn line_names_are_identifiers() {
+    assert_eq!(line_name("Bt1"), "BT1");
+    assert_eq!(line_name("124 Sd"), "124 SD");
+    assert_eq!(line_name(" 6r6 "), "6R6");
+  }
 
   #[test]
   fn fixes_title_case() {

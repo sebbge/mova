@@ -10,49 +10,56 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import {Protocol} from 'pmtiles';
 import {createEffect, createSignal, Match, onCleanup, onMount, Switch} from 'solid-js';
-import type {Bus, RouteShape} from '~/lib/api/types';
-import type {Region} from '~/lib/domain/regions';
+import type {Bus, RouteShape, StopItem} from '~/lib/api/types';
+import {DEFAULT_REGION, regionsInView, type MapCamera} from '~/lib/domain/regions';
 import {BusLayer} from './buses/BusLayer';
 import {routeLayer} from './layers/route';
-import {stopsLayer, type StopPoint} from './layers/stops';
+import {stopsLayer} from './layers/stops';
 import styles from './MapCanvas.module.css';
-import {NearbyStops} from './NearbyStops';
-import {basemapStyle} from './style';
+import {RegionStops} from './RegionStops';
+import {ATTRIBUTION, basemapStyle} from './style';
+import {overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, viewportKm2} from './viewport';
 
 const CAMERA_MS = 400;
+const FOCUS_MS = 500;
 const FOLLOW_MS = 600;
 
 export default function MapCanvas(props: {
-  region: Region;
+  camera: MapCamera;
   shape: RouteShape | null; // one direction
   buses: Bus[];
   selectedStopId: string | null;
+  selectedSiblings: readonly string[];
   followBusId: string | null;
-  onSelectStop?: (stopId: string) => void;
+  onSelectStop?: (stopId: string, stopName?: string) => void;
   onSelectBus?: (bus: Bus) => void;
   onBackground?: () => void;
 }) {
   let container!: HTMLDivElement;
   const [map, setMap] = createSignal<MapLibreMap>();
   const [error, setError] = createSignal<string | null>(null);
-  const nearby = new NearbyStops();
+  const [viewKm2, setViewKm2] = createSignal(Infinity);
+  const tooWide = () => viewKm2() > STOPS_MAX_KM2;
+  const stops = new RegionStops();
 
   onMount(() => {
-    const region = props.region;
+    void stops.load([DEFAULT_REGION]);
     setWorkerUrl(workerUrl);
     addProtocol('pmtiles', new Protocol().tile);
+    const camera = props.camera;
     const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 
     let instance: MapLibreMap;
     try {
       instance = new MapLibreMap({
         container,
-        style: basemapStyle(darkQuery.matches, region.id),
-        center: [region.center.lng, region.center.lat],
-        zoom: region.zoom,
-        minZoom: region.minZoom,
-        maxBounds: region.bounds,
-        attributionControl: {compact: true},
+        style: basemapStyle(darkQuery.matches),
+        center: [camera.center.lng, camera.center.lat],
+        zoom: camera.zoom,
+        minZoom: camera.minZoom,
+        maxBounds: camera.bounds,
+        fadeDuration: 0,
+        attributionControl: false,
       });
     } catch (e) {
       setError((e as Error).message); // no webgl
@@ -68,38 +75,46 @@ export default function MapCanvas(props: {
     });
 
     const addLayers = () => {
-      routeLayer.add(instance);
-      stopsLayer.add(instance);
+      if (instance.getSource('stops')) return;
+      routeLayer.addSource(instance);
+      stopsLayer.addImages(instance);
+      stopsLayer.add(instance, 'stops');
+      routeLayer.addLayers(instance);
+      stopsLayer.add(instance, 'route-stops');
+    };
+
+    const onView = () => {
+      const bounds = instance.getBounds();
+      setViewKm2(viewportKm2(bounds));
+      void stops.load(regionsInView(bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()));
     };
 
     instance.addControl(new NavigationControl({showCompass: false}), 'bottom-right');
     instance.addControl(new GeolocateControl({trackUserLocation: true, showAccuracyCircle: true}), 'bottom-right');
 
-    /* eslint-disable solid/reactivity -- maplibre event handlers read props when they fire */
     instance.on('load', () => {
       addLayers();
+      onView();
       setMap(instance);
-      if (!props.shape) void nearby.refresh(instance);
     });
-    instance.on('moveend', () => {
-      if (!props.shape) nearby.refreshSoon(instance);
-    });
+    instance.on('moveend', onView);
 
-    instance.on('click', stopsLayer.HIT, (e) => {
-      const stopId = e.features?.[0]?.properties?.stop_id;
-      if (stopId) props.onSelectStop?.(String(stopId));
-    });
-    instance.on('click', (e) => {
-      if (instance.queryRenderedFeatures(e.point, {layers: [stopsLayer.HIT]}).length === 0) props.onBackground?.();
-    });
-    for (const layer of stopsLayer.LAYERS) {
+    /* eslint-disable solid/reactivity -- maplibre event handlers read props when they fire */
+    for (const layer of stopsLayer.HITS) {
+      instance.on('click', layer, (e) => {
+        const p = e.features?.[0]?.properties;
+        if (p?.stop_id) props.onSelectStop?.(String(p.stop_id), p.stop_name && String(p.stop_name));
+      });
       instance.on('mouseenter', layer, () => (instance.getCanvas().style.cursor = 'pointer'));
       instance.on('mouseleave', layer, () => (instance.getCanvas().style.cursor = ''));
     }
+    instance.on('click', (e) => {
+      if (instance.queryRenderedFeatures(e.point, {layers: stopsLayer.HITS}).length === 0) props.onBackground?.();
+    });
 
     // setStyle drops custom layers
     const onScheme = (e: MediaQueryListEvent) => {
-      instance.setStyle(basemapStyle(e.matches, region.id));
+      instance.setStyle(basemapStyle(e.matches));
       instance.once('idle', () => {
         addLayers();
         setMap(undefined);
@@ -110,7 +125,7 @@ export default function MapCanvas(props: {
 
     const buses = new BusLayer(instance, (bus) => props.onSelectBus?.(bus));
     /* eslint-enable solid/reactivity */
-    createEffect(() => map() && buses.render(props.buses));
+    createEffect(() => map() && buses.render(props.buses, props.followBusId, props.shape));
 
     onCleanup(() => {
       buses.destroy();
@@ -129,17 +144,21 @@ export default function MapCanvas(props: {
     const m = map();
     if (!m) return;
     const shape = props.shape;
-    const onRoute = new Set(shape?.stops.map((s) => s.stop_id) ?? []);
-    const visible: StopPoint[] = shape ? [...shape.stops, ...nearby.stops] : nearby.stops;
-    const seen = new Set<string>();
-    const unique = visible.filter((s) => !seen.has(s.stop_id) && seen.add(s.stop_id));
-    stopsLayer.set(m, unique, onRoute, props.selectedStopId);
+    const onRoute = new Set(shape?.stops.map((s) => s.cluster) ?? []);
+    const route: StopItem[] = shape
+      ? shape.stops.map((s) => ({id: s.stop_id, name: s.stop_name, lat: s.lat, lng: s.lng}))
+      : [];
+    const rest = tooWide() ? [] : stops.all.filter((s) => !onRoute.has(s.id));
+    const marks = {selectedId: props.selectedStopId, siblings: props.selectedSiblings};
+
+    stopsLayer.set(m, 'route-stops', route, {...marks, dim: false});
+    stopsLayer.set(m, 'stops', rest, {...marks, dim: onRoute.size > 0});
   });
 
   // pans in without zooming out
   createEffect(() => {
     const m = map();
-    if (!m || !props.shape) return;
+    if (!m || !props.shape || props.followBusId) return;
     const bounds = new LngLatBounds();
     for (const [lng, lat] of props.shape.shape.coordinates) bounds.extend([lng, lat]);
     if (!overlaps(m.getBounds(), bounds)) m.panTo(bounds.getCenter(), {duration: CAMERA_MS});
@@ -147,9 +166,17 @@ export default function MapCanvas(props: {
 
   createEffect(() => {
     const m = map();
+    const id = props.selectedStopId;
+    if (!m || !id) return;
+    const stop = stops.find(id) ?? props.shape?.stops.find((s) => s.stop_id === id);
+    if (stop) m.easeTo({center: [stop.lng, stop.lat], zoom: stopsZoom(m), offset: sheetOffset(m), duration: FOCUS_MS});
+  });
+
+  createEffect(() => {
+    const m = map();
     if (!m || !props.followBusId) return;
     const bus = props.buses.find((b) => b.id === props.followBusId);
-    if (bus) m.easeTo({center: [bus.location.lng, bus.location.lat], duration: FOLLOW_MS});
+    if (bus) m.easeTo({center: [bus.location.lng, bus.location.lat], offset: sheetOffset(m), duration: FOLLOW_MS});
   });
 
   return (
@@ -159,19 +186,12 @@ export default function MapCanvas(props: {
         <Match when={error()}>
           <p class={`${styles.banner} ${styles.error}`}>{error()}</p>
         </Match>
-        <Match when={nearby.zoomedOut && !props.shape}>
+        <Match when={tooWide() && !props.shape}>
           <p class={styles.banner}>Acercá el mapa para ver las paradas</p>
         </Match>
       </Switch>
+      {/* eslint-disable-next-line solid/no-innerhtml */}
+      <p class={styles.credit} innerHTML={ATTRIBUTION} />
     </>
-  );
-}
-
-function overlaps(a: LngLatBounds, b: LngLatBounds): boolean {
-  return (
-    a.getWest() <= b.getEast() &&
-    a.getEast() >= b.getWest() &&
-    a.getSouth() <= b.getNorth() &&
-    a.getNorth() >= b.getSouth()
   );
 }

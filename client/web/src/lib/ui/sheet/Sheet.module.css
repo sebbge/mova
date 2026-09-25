@@ -10,58 +10,48 @@
   border-radius: var(--radius) var(--radius) 0 0;
   box-shadow: var(--sheet-shadow);
   transition: height 0.22s cubic-bezier(0.2, 0, 0, 1);
+  overflow: hidden;
 }
 
 .dragging {
   transition: none;
 }
 
-.grip {
-  display: grid;
-  place-items: center;
-  padding: var(--space-3) 0 var(--space-2);
-  cursor: grab;
-  touch-action: none;
-  flex-shrink: 0;
-
-  &:active {
-    cursor: grabbing;
-  }
-
-  span {
-    width: 40px;
-    height: 4px;
-    border-radius: var(--radius-pill);
-    background: var(--text-hint);
-  }
-}
-
-.close {
+.nav {
   position: absolute;
   top: var(--space-2);
-  right: var(--space-2);
   display: grid;
+  padding: 0;
   place-items: center;
   width: 32px;
   height: 32px;
   border: 0;
   border-radius: var(--radius-pill);
   background: none;
-  color: var(--text-secondary);
+  color: var(--service-on);
   cursor: pointer;
 
   &:hover {
-    background: var(--scaffold);
-    color: var(--text-primary);
+    background: color-mix(in srgb, currentColor 16%, transparent);
   }
+}
+
+.back {
+  left: var(--space-1);
+  top: 0.95rem;
+}
+
+.close {
+  right: var(--space-2);
 }
 
 .body {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 0 var(--gutter) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0 var(--gutter);
 }
 
 @media (min-width: 768px) {
@@ -72,9 +62,5 @@
     width: 380px;
     max-height: calc(100dvh - 8rem);
     border-radius: var(--radius);
-  }
-
-  .grip {
-    cursor: default;
   }
 }

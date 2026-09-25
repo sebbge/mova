@@ -59,7 +59,7 @@ fn assert_montevideo(lat: f64, lng: f64, ctx: &str) {
 // = /buses
 
 async fn buses_response_is_coherent() {
-  dotenvy::dotenv().ok();
+  dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
 
   let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().unwrap();
   let base = base_url();
@@ -113,7 +113,7 @@ async fn buses_response_is_coherent() {
 // = /upcomingbuses
 
 async fn upcomingbuses_response_is_coherent() {
-  dotenvy::dotenv().ok();
+  dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
 
   let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().unwrap();
   let base = base_url();
@@ -204,7 +204,7 @@ async fn upcomingbuses_response_is_coherent() {
 
 // `company` in /buses, `companyName` in /upcomingbuses
 async fn cross_endpoint_coherence() {
-  dotenvy::dotenv().ok();
+  dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/../../.env")).ok();
 
   let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(20)).build().unwrap();
   let base = base_url();

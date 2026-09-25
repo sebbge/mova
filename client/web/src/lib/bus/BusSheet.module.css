@@ -1,29 +1,56 @@
+.content {
+  margin: 0 calc(var(--gutter) * -1);
+  padding-bottom: var(--space-4);
+  background: var(--list);
+  color: var(--service-on);
+}
+
+.state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--gutter);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dot);
+  flex-shrink: 0;
+}
+
 .facts {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1px;
   margin: 0;
-  background: var(--divider);
-  border-radius: var(--radius);
-  overflow: hidden;
 
   > div {
-    background: var(--surface);
-    padding: var(--space-3);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--gutter);
+    border-top: 1px solid var(--service-divider);
   }
 
   dt {
-    font-size: 0.6875rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: var(--text-secondary);
+    color: var(--service-on-muted);
   }
 
   dd {
-    margin: 2px 0 0;
+    margin: 0;
     font-size: 0.9375rem;
     font-weight: 600;
+    text-align: right;
   }
+}
+
+.unit {
+  font-variant-numeric: tabular-nums;
 }
 
 .tags {
@@ -31,14 +58,38 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  margin: var(--space-3) 0 0;
-  padding: 0;
+  margin: 0;
+  padding: var(--space-3) var(--gutter) 0;
 
   li {
     padding: 2px var(--space-2);
-    border: 1px solid var(--divider);
+    border: 1px solid var(--service-divider);
     border-radius: var(--radius-pill);
     font-size: 0.75rem;
-    color: var(--text-secondary);
+    color: var(--service-on-muted);
+  }
+}
+
+.line {
+  display: block;
+  width: calc(100% - var(--gutter) * 2);
+  min-height: 44px;
+  margin: var(--space-4) var(--gutter) 0;
+  padding: var(--space-3);
+  border: 1px solid var(--service-divider);
+  border-radius: var(--radius);
+  background: none;
+  color: var(--service-on);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--service-divider);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
   }
 }

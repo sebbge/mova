@@ -1,13 +1,16 @@
 import {For, Show} from 'solid-js';
 import type {BusRoute, RouteShape} from '~/lib/api/types';
-import {href} from '~/lib/ui/href';
+import {companyTint} from '~/lib/ui/palette';
 import parts from '~/lib/ui/sheet/parts.module.css';
+import SheetHeader from '~/lib/ui/sheet/SheetHeader';
+import SheetTabs from '~/lib/ui/sheet/SheetTabs';
 import LineBadge from './LineBadge';
 import styles from './LineSheet.module.css';
+import RouteSkeleton from './RouteSkeleton';
 
 const DIRECTIONS = [
-  {id: 0, label: 'Ida'},
-  {id: 1, label: 'Vuelta'},
+  {id: '0', label: 'Ida'},
+  {id: '1', label: 'Vuelta'},
 ];
 
 export default function LineSheet(props: {
@@ -17,75 +20,97 @@ export default function LineSheet(props: {
   routeId: string | null;
   direction: number;
   origin: string | null;
-  region: string;
+  company?: string; // from where the user entered
+  loading?: boolean; // skeletons until the direction is known
   onSelect?: (routeId: string, direction?: number) => void;
-  onSelectStop?: (stopId: string) => void;
+  onSelectStop?: (stopId: string, stopName?: string) => void;
 }) {
-  const available = () => new Set(props.shape?.available_directions.map((d) => d.direction_id) ?? []);
-  const title = () => props.shape?.headsign ?? props.variants[0]?.route_long_name ?? `Línea ${props.line}`;
+  const tint = () => companyTint(props.company);
+  const directions = () => {
+    const available = new Set(props.shape?.available_directions.map((d) => d.direction_id) ?? []);
+    return DIRECTIONS.map((d) => ({...d, disabled: !available.has(Number(d.id)) || !props.routeId}));
+  };
 
   return (
     <>
-      <header class={parts.header}>
-        <LineBadge line={props.line} />
-        <div class={parts.meta}>
-          <span class={parts.title}>{title()}</span>
-          <Show when={props.origin}>
-            <span class={parts.sub}>desde {props.origin}</span>
-          </Show>
-        </div>
-      </header>
+      <div class={`${parts.band} ${parts.onTint}`} style={{'--sheet-header-bg': tint().header}}>
+        <SheetHeader
+          title={props.shape?.headsign ?? props.variants[0]?.route_long_name ?? `Línea ${props.line}`}
+          subtitle={props.origin ? `desde ${props.origin}` : ''}
+          loading={props.loading}
+          lead={<LineBadge line={props.line} variant='plain' />}
+        />
+      </div>
 
-      <Show when={props.variants.length > 1}>
-        <section class={styles.variants}>
-          <span class={styles.label}>Dirección</span>
-          <For each={props.variants}>
-            {(variant) => (
-              <button
-                classList={{[styles.active]: variant.route_id === props.routeId}}
-                onClick={() => props.onSelect?.(variant.route_id)}>
-                {variant.route_long_name ?? variant.route_id}
-              </button>
+      <div class={`${styles.content} ${parts.onTint}`} style={{'--list': tint().list}}>
+        <Show when={props.variants.length !== 1}>
+          <section class={`${styles.block} ${styles.directions}`}>
+            <span class={styles.label}>Dirección</span>
+            <div class={`${styles.list} sheet-scroll`}>
+              <Show
+                when={props.variants.length > 0}
+                fallback={
+                  <>
+                    <span class={`${styles.row} shimmer`} />
+                    <span class={`${styles.row} shimmer`} />
+                  </>
+                }>
+                <For each={props.variants}>
+                  {(variant) => (
+                    <button
+                      classList={{[styles.active]: variant.route_id === props.routeId}}
+                      onClick={() => props.onSelect?.(variant.route_id)}>
+                      {variant.route_long_name ?? variant.route_id}
+                    </button>
+                  )}
+                </For>
+              </Show>
+            </div>
+          </section>
+        </Show>
+
+        <section class={`${styles.block} ${styles.stops}`}>
+          <span class={styles.label}>Paradas</span>
+          <div class={styles.tabs}>
+            {/* no tab until a direction resolves */}
+            <SheetTabs
+              label='Sentido'
+              tabs={directions()}
+              active={props.loading ? '' : String(props.direction)}
+              onSelect={(id) => props.routeId && props.onSelect?.(props.routeId, Number(id))}
+              tab={(d) => d.label}
+            />
+          </div>
+
+          <Show
+            when={!props.loading && props.shape}
+            fallback={
+              <>
+                <p class='sr-only' role='status'>
+                  Cargando el recorrido
+                </p>
+                <div class='sheet-scroll'>
+                  <RouteSkeleton />
+                </div>
+              </>
+            }>
+            {(shape) => (
+              <ol class={`${styles.list} sheet-scroll`}>
+                <For each={shape().stops}>
+                  {(stop) => (
+                    <li>
+                      <button onClick={() => props.onSelectStop?.(stop.stop_id, stop.stop_name)}>
+                        <span class={styles.id}>{stop.stop_id}</span>
+                        <span class={styles.name}>{stop.stop_name}</span>
+                      </button>
+                    </li>
+                  )}
+                </For>
+              </ol>
             )}
-          </For>
+          </Show>
         </section>
-      </Show>
-
-      {/* both always, a missing one is information */}
-      <nav class={styles.directions} aria-label='Sentido'>
-        <For each={DIRECTIONS}>
-          {(d) => (
-            <button
-              classList={{[styles.active]: d.id === props.direction}}
-              disabled={!available().has(d.id) || !props.routeId}
-              aria-current={d.id === props.direction ? 'true' : undefined}
-              onClick={() => props.routeId && props.onSelect?.(props.routeId, d.id)}>
-              {d.label}
-            </button>
-          )}
-        </For>
-      </nav>
-
-      <Show when={props.shape} fallback={<p class={parts.note}>Cargando el recorrido…</p>}>
-        {(shape) => (
-          <ol class={parts.list}>
-            <For each={shape().stops}>
-              {(stop) => (
-                <li>
-                  <button class={`${parts.row} ${styles.stop}`} onClick={() => props.onSelectStop?.(stop.stop_id)}>
-                    <span class={styles.id}>{stop.stop_id}</span>
-                    <span class={styles.name}>{stop.stop_name}</span>
-                  </button>
-                </li>
-              )}
-            </For>
-          </ol>
-        )}
-      </Show>
-
-      <a class={parts.full} href={href.line(props.region, props.line)}>
-        Ver la línea completa
-      </a>
+      </div>
     </>
   );
 }

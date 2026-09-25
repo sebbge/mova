@@ -1,47 +1,25 @@
-use crate::api::StmApi;
-use crate::api::models::{StmBus, StmLineBus, StmUpcomingBus};
-use citymob_core as core;
-use core::Result;
-use core::bus::{BusEntry, UpcomingArrival};
-use core::provider::{BusesByLine, Feed, Names, Provider, Realtime, UpcomingByLine};
+use super::{StmConfig, api::StmApi};
+use crate::core::provider::prelude::*;
 
 pub struct Stm {
   api: StmApi,
 }
-
 impl Stm {
-  pub fn new() -> Result<Self> {
-    dotenvy::from_path(concat!(env!("CARGO_MANIFEST_DIR"), "/.env")).ok();
+  pub fn new(config: StmConfig) -> Result<Self> {
+    let StmConfig { api_url, auth_url, client_id, client_secret } = config;
 
-    let api = StmApi::new(var("IM_API_URL")?, var("IM_AUTH_URL")?, var("IM_CLIENT_ID")?, var("IM_CLIENT_SECRET")?);
-    Ok(Self { api })
-  }
-}
+    for (key, value) in [
+      ("IM_API_URL", &api_url),
+      ("IM_AUTH_URL", &auth_url),
+      ("IM_CLIENT_ID", &client_id),
+      ("IM_CLIENT_SECRET", &client_secret),
+    ] {
+      if value.trim().is_empty() {
+        return Err(Error::Config(format!("stm: missing {key}")));
+      }
+    }
 
-fn var(key: &str) -> Result<String> {
-  std::env::var(key).map_err(|_| core::Error::Config(format!("uy-mo: falta {key}")))
-}
-
-impl Provider for Stm {
-  fn regions(&self) -> &[&str] {
-    &["uy-mo"]
-  }
-}
-
-#[async_trait::async_trait]
-impl Realtime for Stm {
-  async fn buses(&self, lines: &[String]) -> Result<BusesByLine> {
-    let by_line = self.api.lines(lines).await?;
-    Ok(by_line.into_iter().map(|(line, buses)| (line, buses.into_iter().map(observe_line_bus).collect())).collect())
-  }
-
-  async fn upcoming(&self, stop_id: &str, lines: &[String]) -> Result<UpcomingByLine> {
-    let by_line = self.api.upcoming_lines(stop_id, lines).await?;
-    Ok(by_line.into_iter().map(|(line, buses)| (line, buses.into_iter().map(observe_upcoming).collect())).collect())
-  }
-
-  async fn probe(&self) -> bool {
-    self.api.probe().await
+    Ok(Self { api: StmApi::new(api_url, auth_url, client_id, client_secret)? })
   }
 }
 
@@ -51,45 +29,34 @@ impl Feed for Stm {
     self.api.gtfs_version().await
   }
 
-  async fn download(&self) -> Result<Vec<u8>> {
-    self.api.gtfs_download().await
-  }
-}
-
-impl Names for Stm {
-  fn place(&self, raw: &str) -> String {
-    core::text::place_name(raw)
+  async fn download(&self) -> Result<Static> {
+    Ok(Static { gtfs: self.api.gtfs_download().await?, lines_by_stop: None })
   }
 
   fn route(&self, raw: &str) -> String {
     crate::names::route_name(raw)
   }
+}
 
-  fn line(&self, raw: &str) -> String {
-    crate::names::line_name(raw)
+#[async_trait::async_trait]
+impl Fleet for Stm {
+  async fn fleet(&self) -> Result<Vec<BusEntry>> {
+    match self.api.fleet().await {
+      Ok(fleet) => Ok(fleet.into_iter().map(BusEntry::from).collect()),
+      Err(e) => {
+        tracing::warn!(error = ?e, "[stm/online] fleet fallback");
+        Ok(self.api.online().await?.into_iter().map(BusEntry::from).collect())
+      }
+    }
   }
 }
 
-fn observe(bus: StmBus) -> BusEntry {
-  BusEntry {
-    id: bus.bus_id.to_string(),
-    line: bus.line,
-    company: bus.company,
-    location: bus.location,
-    speed: None,
-    origin: Some(core::text::place_name(&bus.origin)),
-    destination: Some(core::text::place_name(&bus.destination)),
-    timestamp: None,
-    access: bus.access.label(),
-    emissions: bus.emissions.label(),
-    thermal_comfort: bus.thermal_confort.label(),
+#[async_trait::async_trait]
+impl Arrivals for Stm {
+  async fn upcoming(&self, stop_id: &str, lines: &[String]) -> Result<UpcomingByLine> {
+    let by_line = self.api.upcoming_lines(stop_id, lines).await?;
+    Ok(
+      by_line.into_iter().map(|(line, buses)| (line, buses.into_iter().map(UpcomingArrival::from).collect())).collect(),
+    )
   }
-}
-
-fn observe_line_bus(im: StmLineBus) -> BusEntry {
-  BusEntry { speed: im.speed, timestamp: im.timestamp, ..observe(im.bus) }
-}
-
-fn observe_upcoming(im: StmUpcomingBus) -> UpcomingArrival {
-  UpcomingArrival { eta_s: im.eta, distance_m: im.distance, position: im.position, bus: observe(im.bus) }
 }

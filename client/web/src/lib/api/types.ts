@@ -11,6 +11,7 @@ export type BusFreshness = 'live' | 'low_precision' | 'imprecise';
 
 export interface Bus {
   id: string;
+  unit: string;
   line: string;
   company: string;
   location: Point;
@@ -18,10 +19,12 @@ export interface Bus {
   origin?: string;
   destination?: string;
   headsign?: string;
+  shape_id?: string;
   timestamp?: string;
   access?: string;
   emissions?: string;
   thermal_comfort?: string;
+  delay_min?: number;
   bearing_deg?: number;
   freshness: BusFreshness;
   still: boolean;
@@ -31,16 +34,8 @@ export interface Bus {
   last_seen_epoch: number;
 }
 
-export interface NearbyStop {
-  stop_id: string;
-  stop_name: string;
-  lat: number;
-  lng: number;
-  distance_meters: number;
-  bearing_rad?: number;
-}
-
 export interface StopArrival {
+  zonal?: boolean; // zone marker
   eta?: number;
   live: boolean;
   bus?: Bus;
@@ -53,8 +48,44 @@ export interface StopLine {
   arrivals: StopArrival[];
 }
 
+export interface ScheduledLine {
+  zonal?: boolean;
+  line: string;
+  destination: string | null;
+  departures: number[]; // s since today's midnight
+}
+
+export interface StopSchedule {
+  service_date: string;
+  lines: ScheduledLine[];
+}
+
 export interface StopDetail {
   lines: StopLine[];
+}
+
+export interface Stop {
+  stop_id: string;
+  stop_name: string;
+  area?: string; // ISO 3166-2
+  lat: number;
+  lng: number;
+  bearing_rad?: number;
+  siblings: string[]; // same point, leading first
+  lines: StopRoute[];
+}
+
+export interface StopRoute {
+  line: string;
+  destinations: string[];
+}
+
+export interface StopItem {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  providers?: string[];
 }
 
 export interface BusRoute {
@@ -62,10 +93,12 @@ export interface BusRoute {
   route_short_name: string;
   route_long_name?: string;
   agency_id?: string;
+  area?: string;
 }
 
 export interface RouteStop {
   stop_id: string;
+  cluster: string; // shelter ref
   stop_name: string;
   stop_sequence: number;
   lat: number;
@@ -80,41 +113,10 @@ export interface DirectionInfo {
 
 export interface RouteShape {
   route_id: string;
+  shape_id: string;
   direction_id: number;
   headsign?: string;
   shape: LineString;
   stops: RouteStop[];
   available_directions: DirectionInfo[];
-}
-
-export interface ScheduledLine {
-  line: string;
-  destination: string | null;
-  departures: number[]; // s since today's midnight
-}
-
-export interface StopSchedule {
-  service_date: string;
-  lines: ScheduledLine[];
-}
-
-export interface Stop {
-  stop_id: string;
-  stop_name: string;
-  lat: number;
-  lng: number;
-  bearing_rad?: number;
-  lines: StopRoute[];
-}
-
-export interface StopRoute {
-  line: string;
-  destinations: string[];
-}
-
-export interface StopSummary {
-  stop_id: string;
-  stop_name: string;
-  lat: number;
-  lng: number;
 }

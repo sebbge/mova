@@ -2,7 +2,9 @@
 import {PUBLIC_SITE_URL} from 'astro:env/client';
 import Base from '~/layouts/Base.astro';
 import {api} from '~/lib/api/client';
+import {orderedRefs, providerInfo, providerOf, serviceOf} from '~/lib/domain/providers';
 import type {Region} from '~/lib/domain/regions';
+import {rawId} from '~/lib/format';
 import LineBadge from '~/lib/line/LineBadge';
 import Arrivals from '~/lib/stop/Arrivals';
 import Header from '~/lib/ui/Header';
@@ -14,36 +16,54 @@ export const getStaticPaths = stopPaths;
 const {region} = Astro.props as {region: Region};
 const stop = await api.stop(Astro.params.id!);
 const name = stop.stop_name;
+const number = rawId(stop.siblings[0] ?? stop.stop_id);
+const siblings = orderedRefs(stop.siblings);
+const suburban = serviceOf(stop.stop_id) === 'suburban';
 const lineList = stop.lines
   .map((l) => l.line)
   .slice(0, 8)
   .join(', ');
 
 const description = stop.lines.length
-  ? `Horarios y llegadas en la parada ${stop.stop_id}, ${name}. Líneas ${lineList}.`
-  : `Parada ${stop.stop_id}, ${name}, en ${region.name}.`;
+  ? `Horarios y llegadas en la parada ${number}, ${name}. Líneas ${lineList}.`
+  : `Parada ${number}, ${name}, en ${region.name}.`;
 
 const jsonLd = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'BusStop',
   name,
-  identifier: stop.stop_id,
+  identifier: number,
   address: {'@type': 'PostalAddress', addressLocality: region.name, addressCountry: 'UY'},
   geo: {'@type': 'GeoCoordinates', latitude: stop.lat, longitude: stop.lng},
 });
 ---
 
 <Base
-  title={`Parada ${stop.stop_id} · ${name}, ${region.name} | bondi`}
+  title={`Parada N° ${number} · ${name} | ${region.name} | bondi`}
   description={description}
   canonical={`${PUBLIC_SITE_URL}${href.stop(region.slug, stop.stop_id)}`}>
   <script type='application/ld+json' set:html={jsonLd} slot='head' />
   <Header back={href.region(region.slug)} />
 
   <main>
-    <div class='head'>
-      <span class='kicker'>Parada {stop.stop_id}</span>
+    <div class:list={['head', {suburban}]}>
+      <span class='kicker'>Parada {number}</span>
       <h1>{name}</h1>
+
+      {siblings.length > 1 ? (
+        <nav class='services' aria-label='Tipo de servicio'>
+          {siblings.map((ref) => (
+            <a
+              href={href.stop(region.slug, ref)}
+              class:list={{current: ref === stop.stop_id}}
+              aria-current={ref === stop.stop_id ? 'page' : undefined}>
+              {providerInfo(providerOf(ref)).label}
+            </a>
+          ))}
+        </nav>
+      ) : (
+        <p class='only'>{providerInfo(providerOf(stop.stop_id)).only}</p>
+      )}
     </div>
 
     <Arrivals client:load stopId={stop.stop_id} />
@@ -58,7 +78,7 @@ const jsonLd = JSON.stringify({
             <li>
               <a href={href.line(region.slug, line.line)}>
                 <LineBadge line={line.line} size='sm' />
-                <span class='destinations'>{line.destinations.join(' · ')}</span>
+                {line.destinations.length > 0 && <span class='destinations'>{line.destinations.join(' · ')}</span>}
               </a>
             </li>
           ))}
@@ -79,17 +99,55 @@ const jsonLd = JSON.stringify({
   }
 
   .head {
+    --service: var(--brand-light);
     display: flex;
     flex-direction: column;
     gap: var(--space-1);
+
+    &.suburban {
+      --service: var(--service-suburban-header);
+    }
   }
 
-  .kicker {
-    color: var(--text-secondary);
+  .kicker,
+  .only {
+    color: var(--service);
     font-size: 0.875rem;
     text-transform: uppercase;
     letter-spacing: 0.06em;
+  }
+
+  .kicker {
     font-variant-numeric: tabular-nums;
+  }
+
+  .only {
+    margin-top: var(--space-2);
+  }
+
+  .services {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
+
+    a {
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--divider);
+      border-radius: var(--radius-pill);
+      font-size: 0.875rem;
+      color: var(--text-secondary);
+
+      &:hover {
+        text-decoration: none;
+        border-color: var(--service);
+      }
+
+      &.current {
+        background: var(--service);
+        border-color: var(--service);
+        color: var(--brand-contrast);
+      }
+    }
   }
 
   section {
@@ -113,19 +171,19 @@ const jsonLd = JSON.stringify({
     background: var(--divider);
     border-radius: var(--radius);
     overflow: hidden;
-  }
 
-  .lines a {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-4);
-    background: var(--surface);
-  }
+    a {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      background: var(--surface);
 
-  .lines a:hover {
-    text-decoration: none;
-    background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+      &:hover {
+        text-decoration: none;
+        background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+      }
+    }
   }
 
   .destinations {

@@ -1,4 +1,4 @@
-import {createMemo, createSignal, onCleanup, type Accessor, type Setter} from 'solid-js';
+import {createMemo, createRoot, createSignal, type Accessor, type Setter} from 'solid-js';
 import {api} from '~/lib/api/client';
 import type {Bus, StopLine, StopSchedule} from '~/lib/api/types';
 import {scheduleToLines} from '~/lib/domain/schedule';
@@ -7,45 +7,53 @@ import {scheduleToLines} from '~/lib/domain/schedule';
 export class ArrivalsSource {
   static readonly REFRESH_MS = 30_000;
 
-  readonly #schedule: Accessor<StopSchedule | null>;
-  readonly #setSchedule: Setter<StopSchedule | null>;
-  readonly #live: Accessor<StopLine[]>;
   readonly #setLive: Setter<StopLine[]>;
-  readonly #answered: Accessor<number>;
-  readonly #setAnswered: Setter<number>;
+  readonly #setArrivalsAnswered: Setter<boolean>;
   readonly #liveFailed: Accessor<boolean>;
   readonly #setLiveFailed: Setter<boolean>;
-  readonly #tick: Accessor<number>;
   readonly #setTick: Setter<number>;
   readonly #lines: Accessor<StopLine[]>;
-  readonly #controller = new AbortController();
+  readonly #loading: Accessor<boolean>;
+  readonly #dispose: () => void;
+  readonly #timer: ReturnType<typeof setInterval>;
+  protected readonly controller = new AbortController();
 
-  constructor(readonly stopId: string) {
-    [this.#schedule, this.#setSchedule] = createSignal<StopSchedule | null>(null);
-    [this.#live, this.#setLive] = createSignal<StopLine[]>([]);
-    [this.#answered, this.#setAnswered] = createSignal(0);
+  constructor(readonly ref: string) {
+    const [schedule, setSchedule] = createSignal<StopSchedule | null>(null);
+    const [live, setLive] = createSignal<StopLine[]>([]);
+    const [scheduleAnswered, setScheduleAnswered] = createSignal(false);
+    const [arrivalsAnswered, setArrivalsAnswered] = createSignal(false);
+    const [tick, setTick] = createSignal(Date.now());
     [this.#liveFailed, this.#setLiveFailed] = createSignal(false);
-    [this.#tick, this.#setTick] = createSignal(Date.now());
+    this.#setLive = setLive;
+    this.#setArrivalsAnswered = setArrivalsAnswered;
+    this.#setTick = setTick;
 
-    this.#lines = createMemo(() => {
-      const live = this.#live();
-      if (live.length > 0) return live;
-      const schedule = this.#schedule();
-      return schedule ? scheduleToLines(schedule, new Date(this.#tick())) : [];
+    let dispose!: () => void;
+    let lines!: Accessor<StopLine[]>;
+    let loading!: Accessor<boolean>;
+    createRoot((d) => {
+      dispose = d;
+      const scheduled = createMemo(() => {
+        const s = schedule();
+        return s ? scheduleToLines(s, new Date(tick())) : [];
+      });
+      lines = createMemo(() => (live().length > 0 ? live() : scheduled()));
+      // empty schedule keeps waiting for live
+      loading = createMemo(() => !arrivalsAnswered() && (!scheduleAnswered() || scheduled().length === 0));
     });
+    this.#dispose = dispose;
+    this.#lines = lines;
+    this.#loading = loading;
 
     api
-      .stopSchedule(stopId, {signal: this.#controller.signal})
-      .then((s) => this.#setSchedule(s))
+      .stopSchedule(ref, {signal: this.controller.signal})
+      .then((s) => setSchedule(s))
       .catch(() => {})
-      .finally(() => this.#answer());
+      .finally(() => !this.controller.signal.aborted && setScheduleAnswered(true));
 
     void this.#load();
-    const timer = setInterval(() => void this.#load(), ArrivalsSource.REFRESH_MS);
-    onCleanup(() => {
-      clearInterval(timer);
-      this.#controller.abort();
-    });
+    this.#timer = setInterval(() => void this.#load(), ArrivalsSource.REFRESH_MS);
   }
 
   get lines(): StopLine[] {
@@ -53,7 +61,7 @@ export class ArrivalsSource {
   }
 
   get loading(): boolean {
-    return this.#answered() === 0;
+    return this.#loading();
   }
 
   get liveFailed(): boolean {
@@ -64,22 +72,24 @@ export class ArrivalsSource {
     return this.lines.flatMap((l) => l.arrivals).flatMap((a) => (a.bus ? [a.bus] : []));
   }
 
+  close() {
+    clearInterval(this.#timer);
+    this.controller.abort();
+    this.#dispose();
+  }
+
   async #load() {
-    const signal = this.#controller.signal;
+    const signal = this.controller.signal;
     try {
-      this.#setLive((await api.stopArrivals(this.stopId, {signal})).lines);
+      this.#setLive((await api.stopArrivals(this.ref, {signal})).lines);
       this.#setLiveFailed(false);
     } catch {
       if (!signal.aborted) this.#setLiveFailed(true); // keeps the last arrivals
     } finally {
       if (!signal.aborted) {
-        this.#answer();
+        this.#setArrivalsAnswered(true);
         this.#setTick(Date.now()); // schedule keeps counting
       }
     }
-  }
-
-  #answer() {
-    if (!this.#controller.signal.aborted) this.#setAnswered((n) => n + 1);
   }
 }

@@ -1,11 +1,6 @@
 import type {BusFreshness} from '~/lib/api/types';
 
-const COMPANY: Record<string, string> = {
-  CUTCSA: 'var(--company-cutcsa)',
-  COME: 'var(--company-come)',
-  UCOT: 'var(--company-ucot)',
-  COETC: 'var(--company-coetc)',
-};
+const COMPANIES = ['CUTCSA', 'COME', 'UCOT', 'COETC'];
 
 const FRESHNESS: Record<BusFreshness, string> = {
   live: 'var(--freshness-live)',
@@ -13,8 +8,27 @@ const FRESHNESS: Record<BusFreshness, string> = {
   imprecise: 'var(--freshness-imprecise)',
 };
 
+function companySlug(company: string | undefined): string | undefined {
+  const name = company?.toUpperCase();
+  return name && COMPANIES.includes(name) ? name.toLowerCase() : undefined;
+}
+
 export function companyVar(company: string | undefined): string {
-  return COMPANY[company?.toUpperCase() ?? ''] ?? 'var(--text-secondary)';
+  const slug = companySlug(company);
+  return slug ? `var(--company-${slug})` : 'var(--text-secondary)';
+}
+
+export function companyOutlineVar(company: string | undefined): string {
+  const slug = companySlug(company);
+  return slug ? `var(--company-${slug}-outline)` : 'var(--text-hint)';
+}
+
+// unknown -> urban
+export function companyTint(company: string | undefined): {header: string; list: string} {
+  const slug = companySlug(company);
+  return slug
+    ? {header: `var(--company-${slug}-header)`, list: `var(--company-${slug}-list)`}
+    : {header: 'var(--service-urban-header)', list: 'var(--service-urban-list)'};
 }
 
 export function freshnessVar(live: boolean, freshness?: BusFreshness): string {

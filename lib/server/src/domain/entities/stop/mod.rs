@@ -26,6 +26,8 @@ pub struct ScheduledLine {
   pub destination: Option<String>,
   /// s from midnight
   pub departures: Vec<i64>,
+  /// Schedule from a zone marker
+  pub zonal: bool,
 }
 
 ///# GET <BONDI>/stops/{stop_id}
@@ -34,9 +36,13 @@ pub struct ScheduledLine {
 pub struct Stop {
   pub stop_id: String,
   pub stop_name: String,
+  /// Department of the point
+  pub area: Option<String>,
   pub lat: f64,
   pub lng: f64,
   pub bearing_rad: Option<f64>,
+  /// Refs of this same point, leader first
+  pub siblings: Vec<String>,
   pub lines: Vec<StopRoute>,
 }
 
@@ -47,13 +53,15 @@ pub struct StopRoute {
   pub destinations: Vec<String>,
 }
 
-///# GET <BONDI>/stops
+#[skip_serializing_none]
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
-pub struct StopSummary {
-  pub stop_id: String,
-  pub stop_name: String,
+pub struct StopItem {
+  pub id: String,
+  pub name: String,
   pub lat: f64,
   pub lng: f64,
+  /// Providers sharing the point, only when several
+  pub providers: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -70,6 +78,8 @@ pub struct StopArrival {
   pub eta: Option<i64>,
   pub live: bool,
   pub bus: Option<Bus>,
+  /// Zone marker schedules only
+  pub zonal: bool,
 }
 
 //TODO: remove
@@ -77,6 +87,35 @@ pub struct ApproachingBusRow {
   pub line: String,
   pub bus_id: String,
   pub remaining_m: f64,
+  pub scheduled_s: Option<f64>,
+}
+
+/// (shape position, s), backward stops dropped
+pub struct ScheduleProfile(Vec<(f64, f64)>);
+
+impl ScheduleProfile {
+  pub fn new(fracs: &[f64], secs: &[f64]) -> Self {
+    let mut knots: Vec<(f64, f64)> = Vec::with_capacity(fracs.len());
+    for (&f, &t) in fracs.iter().zip(secs) {
+      if knots.last().is_none_or(|&(lf, lt)| f >= lf && t >= lt) {
+        knots.push((f, t));
+      }
+    }
+    Self(knots)
+  }
+
+  fn at(&self, frac: f64) -> Option<f64> {
+    let i = self.0.windows(2).position(|w| w[0].0 <= frac && frac <= w[1].0)?;
+    let ((f0, t0), (f1, t1)) = (self.0[i], self.0[i + 1]);
+    if f1 == f0 {
+      return Some(t0);
+    }
+    Some(t0 + (frac - f0) / (f1 - f0) * (t1 - t0))
+  }
+
+  pub fn between(&self, from: f64, to: f64) -> Option<f64> {
+    Some(self.at(to)? - self.at(from)?)
+  }
 }
 
 //TODO: remove
@@ -99,34 +138,42 @@ impl StopArrival {
       .collect()
   }
 
+  /// Live, scheduled, untimed
   pub fn sort_by_eta(arrivals: &mut [Self]) {
-    arrivals.sort_by(|a, b| match (a.eta, b.eta) {
-      (Some(x), Some(y)) => x.cmp(&y),
-      (Some(_), None) => std::cmp::Ordering::Less,
-      (None, Some(_)) => std::cmp::Ordering::Greater,
-      (None, None) => std::cmp::Ordering::Equal,
-    });
+    arrivals.sort_by_key(Self::rank);
   }
 
-  pub fn from_approaching_bus(bus: &Bus, remaining_m: f64) -> Self {
-    let speed = bus.get_speed();
-    let eta = if speed >= 3.0 {
-      let min = (remaining_m / (speed * 1000.0 / 3600.0) / 60.0).round() as i64;
-      if min <= 90 { Some(min) } else { None }
-    } else {
-      None
-    };
+  fn rank(&self) -> (bool, bool, i64) {
+    (!self.live, self.eta.is_none(), self.eta.unwrap_or_default())
+  }
+
+  /// Commercial speed without schedule
+  const FALLBACK_KMH: f64 = 15.0;
+  const PLAUSIBLE_KMH: std::ops::RangeInclusive<f64> = 3.0..=90.0;
+  const DEPARTED_KMH: f64 = 3.0;
+
+  /// ETA from scheduled time between bus and stop
+  pub fn from_approaching_bus(bus: &Bus, row: &ApproachingBusRow, had_eta: bool) -> Self {
+    let waiting = !had_eta && bus.speed < Self::DEPARTED_KMH;
+    let eta = (!bus.still && !waiting).then(|| {
+      let scheduled = row.scheduled_s.filter(|&s| Self::PLAUSIBLE_KMH.contains(&(row.remaining_m / s * 3.6)));
+      let secs = scheduled.unwrap_or(row.remaining_m / (Self::FALLBACK_KMH / 3.6));
+      (secs / 60.0).round() as i64
+    });
+    let eta = eta.filter(|&min| min <= 90);
     let mut snap = bus.clone();
     snap.past_stop = false;
-    Self { eta, live: eta.is_some(), bus: Some(snap) }
+    Self { eta, live: eta.is_some(), bus: Some(snap), zonal: false }
   }
 
   pub fn from_upcoming(u: &UpcomingArrival) -> Self {
     Self {
       eta: crate::helpers::seconds_to_mins(u.eta_s),
       live: true,
+      zonal: false,
       bus: Some(Bus {
         id: u.bus.id.clone(),
+        unit: u.bus.unit.clone(),
         line: u.bus.line.clone(),
         location: u.bus.location,
         bearing_deg: None,
@@ -135,6 +182,7 @@ impl StopArrival {
         destination: u.bus.destination.clone(),
         company: u.bus.company.clone(),
         headsign: None,
+        shape_id: u.bus.shape_id.clone(),
         timestamp: None,
         still: false,
         speed: 0.0,
@@ -142,6 +190,7 @@ impl StopArrival {
         access: u.bus.access.clone(),
         emissions: u.bus.emissions.clone(),
         thermal_comfort: u.bus.thermal_comfort.clone(),
+        delay_min: u.bus.delay_min,
         stale_count: 0,
         last_seen_epoch: chrono::Utc::now().timestamp(),
       }),
@@ -151,9 +200,8 @@ impl StopArrival {
 
 impl StopLine {
   pub fn cmp_by_first_eta(&self, other: &Self) -> std::cmp::Ordering {
-    let ea = self.arrivals.first().and_then(|a| a.eta);
-    let eb = other.arrivals.first().and_then(|a| a.eta);
-    ea.cmp(&eb)
+    let rank = |l: &Self| l.arrivals.first().map(StopArrival::rank).unwrap_or((true, true, 0));
+    rank(self).cmp(&rank(other))
   }
 
   fn empty(line: String) -> Self {
@@ -162,6 +210,7 @@ impl StopLine {
 
   async fn fuse(
     state: &crate::State,
+    scope: &Scope,
     stop_id: &str,
     mut lines: StopLines,
     upcoming: UpcomingByLine,
@@ -198,13 +247,19 @@ impl StopLine {
       if !all_buses.is_empty() {
         let bus_meta: HashMap<String, &Bus> = all_buses.iter().map(|b| (b.id.clone(), b)).collect();
 
-        if let Ok(rows) = StopArrival::query_approaching(&state.db, stop_id, &all_buses).await {
+        if let Ok(rows) = StopArrival::query_approaching(&state.db, scope, stop_id, &all_buses).await {
+          use crate::cache::{BusTracking, bus_key};
+          let ghosts = state.cache.tracker().stop_ghosts(&scope.region, stop_id).await;
           let mut computed: HashMap<String, Vec<StopArrival>> = HashMap::new();
           for row in rows {
             let Some(bus) = bus_meta.get(&row.bus_id) else {
               continue;
             };
-            computed.entry(row.line.clone()).or_default().push(StopArrival::from_approaching_bus(bus, row.remaining_m));
+            computed.entry(row.line.clone()).or_default().push(StopArrival::from_approaching_bus(
+              bus,
+              &row,
+              ghosts.contains_key(&bus_key(&scope.provider, &row.bus_id)),
+            ));
           }
 
           for (line_id, mut live_arrivals) in computed {
@@ -242,23 +297,30 @@ impl StopLine {
   // ghost tracking
 
   /// Keeps rt arrivals across feed gaps
-  async fn apply_ghosts(state: &crate::State, stop_id: &str, lines: &mut StopLines, positions: &HashMap<String, Line>) {
-    use crate::cache::{BusTracking, StopGhost};
+  async fn apply_ghosts(
+    state: &crate::State,
+    scope: &Scope,
+    stop_id: &str,
+    lines: &mut StopLines,
+    positions: &HashMap<String, Line>,
+  ) {
+    use crate::cache::{BusTracking, StopGhost, bus_key, split_bus_key};
     let tracker = state.cache.tracker();
-    let mut ghost_map = tracker.stop_ghosts(stop_id).await;
+    let (region, provider) = (scope.region.as_str(), scope.provider.as_str());
+    let mut ghost_map = tracker.stop_ghosts(region, stop_id).await;
 
     let live_bus_ids: HashSet<String> = positions
       .values()
       .flat_map(|l| l.buses.iter())
       .filter(|b| b.freshness == BusFreshness::Live)
-      .map(|b| b.id.clone())
+      .map(|b| bus_key(provider, &b.id))
       .collect();
 
     let current_rt_bus_ids: HashSet<String> = lines
       .values()
       .flat_map(|l| &l.arrivals)
       .filter(|a| a.live)
-      .filter_map(|a| a.bus.as_ref().map(|b| b.id.clone()))
+      .filter_map(|a| a.bus.as_ref().map(|b| bus_key(provider, &b.id)))
       .collect();
 
     for line_data in lines.values() {
@@ -269,10 +331,11 @@ impl StopLine {
         let Some(bus) = arrival.bus.as_ref() else {
           continue;
         };
-        tracker.mark_seen(&bus.id).await;
+        tracker.mark_seen(provider, &bus.id).await;
+        let key = bus_key(provider, &bus.id);
         let ghost = StopGhost { arrival: arrival.clone(), line: line_data.line.clone() };
-        tracker.set_stop_ghost(stop_id, &bus.id, ghost.clone()).await;
-        ghost_map.insert(bus.id.clone(), ghost);
+        tracker.set_stop_ghost(region, stop_id, &key, ghost.clone()).await;
+        ghost_map.insert(key, ghost);
       }
     }
 
@@ -282,12 +345,16 @@ impl StopLine {
     let mut ghost_count = 0usize;
     for id in ghost_ids {
       if live_bus_ids.contains(&id) {
-        tracker.remove_stop_ghost(stop_id, &id).await;
+        tracker.remove_stop_ghost(region, stop_id, &id).await;
         continue;
       }
 
-      let Some((freshness, last_seen_epoch)) = tracker.missing(&id).await else {
-        tracker.remove_stop_ghost(stop_id, &id).await;
+      let Some((prov, raw)) = split_bus_key(&id) else {
+        continue;
+      };
+
+      let Some((freshness, last_seen_epoch)) = tracker.missing(prov, raw).await else {
+        tracker.remove_stop_ghost(region, stop_id, &id).await;
         continue;
       };
 
@@ -298,8 +365,8 @@ impl StopLine {
       let adjusted_eta = entry.arrival.eta.map(|m| m - elapsed_min);
 
       if adjusted_eta.is_some_and(|m| m < 0) {
-        tracker.remove_stop_ghost(stop_id, &id).await;
-        tracker.remove(&id).await;
+        tracker.remove_stop_ghost(region, stop_id, &id).await;
+        tracker.remove(prov, raw).await;
         continue;
       }
 
@@ -319,7 +386,7 @@ impl StopLine {
         StopArrival::sort_by_eta(&mut stop_line.arrivals);
         stop_line.arrivals.truncate(3);
       }
-      tracing::info!(stop = %stop_id, ghosts = ghost_count, "stop ghost tracking injected");
+      tracing::info!(stop = %stop_id, ghosts = ghost_count, "[stops] ghost tracking injected");
     }
   }
 
@@ -368,6 +435,7 @@ impl StopLine {
   /// Buses up to 500 m past the stop
   async fn attach_past_stop_buses(
     state: &crate::State,
+    scope: &Scope,
     stop_id: &str,
     lines: &mut StopLines,
     positions: &HashMap<String, Line>,
@@ -382,7 +450,7 @@ impl StopLine {
 
     let bus_meta: HashMap<String, &Bus> = all_buses.iter().map(|b| (b.id.clone(), b)).collect();
 
-    let rows = match StopArrival::query_past_stop(&state.db, stop_id, &all_buses).await {
+    let rows = match StopArrival::query_past_stop(&state.db, scope, stop_id, &all_buses).await {
       Ok(rows) => rows,
       Err(_) => return,
     };
@@ -404,23 +472,43 @@ impl StopLine {
       snap.past_stop = true;
 
       let stop_line = lines.entry(row.line.clone()).or_insert_with(|| Self::empty(row.line.clone()));
-      stop_line.arrivals.push(StopArrival { eta: None, live: false, bus: Some(snap) });
+      stop_line.arrivals.push(StopArrival { eta: None, live: false, bus: Some(snap), zonal: false });
     }
   }
 }
 
 use super::bus::Lines;
+use crate::domain::scope::Scope;
 impl StopDetail {
+  pub async fn assemble(state: &crate::State, scope: &Scope, stop_id: &str) -> crate::Result<Self> {
+    // gtfs departures
+    let static_lines = StopLine::get(&state.db, scope, stop_id).await?;
+    let line_ids: Vec<String> = static_lines.keys().cloned().collect();
+
+    // provider arrivals + line buses
+    let upcoming = async {
+      match scope.arrivals() {
+        Some(arrivals) => arrivals.upcoming(stop_id, &line_ids).await.unwrap_or_default(),
+        None => Default::default(),
+      }
+    };
+    let (upcoming_lines, live_lines) = tokio::join!(upcoming, Line::fetch(state, scope, &line_ids));
+
+    // merge
+    Ok(Self::build(state, scope, stop_id, static_lines, upcoming_lines, live_lines.unwrap_or_default()).await)
+  }
+
   pub async fn build(
     state: &crate::State,
+    scope: &Scope,
     stop_id: &str,
     static_lines: StopLines,
     upcoming: UpcomingByLine,
     positions: Lines,
   ) -> Self {
-    let mut lines = StopLine::fuse(state, stop_id, static_lines, upcoming, &positions).await;
-    StopLine::apply_ghosts(state, stop_id, &mut lines, &positions).await;
-    StopLine::attach_past_stop_buses(state, stop_id, &mut lines, &positions).await;
+    let mut lines = StopLine::fuse(state, scope, stop_id, static_lines, upcoming, &positions).await;
+    StopLine::apply_ghosts(state, scope, stop_id, &mut lines, &positions).await;
+    StopLine::attach_past_stop_buses(state, scope, stop_id, &mut lines, &positions).await;
     Self::from_lines(lines)
   }
 
@@ -428,7 +516,10 @@ impl StopDetail {
     let mut lines: Vec<StopLine> = line_map
       .into_values()
       .map(|mut l| {
-        l.company = l.arrivals.first().and_then(|a| a.bus.as_ref().map(|b| b.company.clone())).unwrap_or_default();
+        let bus = l.arrivals.first().and_then(|a| a.bus.as_ref());
+        l.company = bus.map(|b| b.company.clone()).unwrap_or_default();
+        // destination of the shown bus
+        l.destination = bus.and_then(|b| b.destination.clone()).or(l.destination);
         l
       })
       .collect();
@@ -437,11 +528,11 @@ impl StopDetail {
 
     let detail = Self { lines };
 
-    // DEBUG: write response to response.json
+    #[cfg(debug_assertions)] // DEBUG: write response to response.json
     if let Ok(json) = serde_json::to_string_pretty(&detail)
       && let Err(e) = std::fs::write("../response.json", &json)
     {
-      tracing::warn!(error = ?e, "failed to write debug response.json");
+      tracing::warn!(error = ?e, "[stops] failed to write debug response.json");
     }
 
     detail

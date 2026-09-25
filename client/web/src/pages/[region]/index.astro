@@ -12,14 +12,14 @@ const {region} = Astro.props as {region: Region};
 ---
 
 <Base
-  title={`Transporte público en ${region.name} | bondi`}
+  title={`Transporte público en ${region.name} | Bondi`}
   description={`Horarios, recorridos y llegadas en tiempo real de los ómnibus de ${region.name}.`}>
   <Header back='/' />
   <main>
     <h1>{region.name}</h1>
     <LineSearch client:idle region={region.slug} />
 
-    <a class='map' href={href.map(region.slug)}>
+    <a class='map' href={href.map()}>
       <span>Ver el mapa</span>
       <span class='sub'>Paradas cercanas y buses en vivo</span>
     </a>

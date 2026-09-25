@@ -6,6 +6,7 @@ import type {RouteShape} from '~/lib/api/types';
 import type {Region} from '~/lib/domain/regions';
 import LineBadge from '~/lib/line/LineBadge';
 import Header from '~/lib/ui/Header';
+import {rawId} from '~/lib/format';
 import {href} from '~/lib/ui/href';
 import {linePaths} from '../../_paths';
 
@@ -37,7 +38,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
 ---
 
 <Base
-  title={`Línea ${line}${longName ? ` · ${longName}` : ''}, ${region.name} | bondi`}
+  title={`${line}${longName ? ` · ${longName}` : ''} | ${region.name} | bondi`}
   description={`Recorrido y paradas de la línea ${line} de ${region.name}${longName ? `: ${longName}` : ''}.`}
   canonical={`${PUBLIC_SITE_URL}${href.line(region.slug, line)}`}>
   <Header back={href.region(region.slug)} />
@@ -48,7 +49,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
       <h1>{longName}</h1>
     </div>
 
-    <a class='map-link' href={href.map(region.slug, {linea: line})}>
+    <a class='map-link' href={href.map({linea: line})}>
       <span>Ver en el mapa</span>
       <span class='sub'>Recorrido y buses en vivo</span>
     </a>
@@ -78,7 +79,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
               {s.stops.map((stop) => (
                 <li>
                   <a href={href.stop(region.slug, stop.stop_id)}>
-                    <span class='id'>{stop.stop_id}</span>
+                    <span class='id'>{rawId(stop.stop_id)}</span>
                     <span class='name'>{stop.stop_name}</span>
                   </a>
                 </li>

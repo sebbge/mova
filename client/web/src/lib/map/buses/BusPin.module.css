@@ -8,7 +8,9 @@
   border: 0;
   background: none;
   cursor: pointer;
-  transition: filter 0.15s ease;
+  transition:
+    filter 0.15s ease,
+    opacity 0.2s ease;
 
   &:hover .badge {
     transform: scale(1.08);
@@ -24,25 +26,41 @@
   }
 }
 
+.dimmed {
+  opacity: 0.45;
+}
+
 .badge {
   display: grid;
   place-items: center;
-  min-width: 26px;
-  height: 26px;
-  padding: 0 5px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  overflow: hidden;
   background: var(--pin);
   color: var(--brand-contrast);
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
-  border-radius: 7px;
-  border: 2px solid var(--surface);
+  white-space: nowrap;
+  border-radius: 50%;
+  border: 2px solid var(--pin-outline);
   box-shadow: var(--pin-shadow);
+
+  &.long {
+    font-size: 9px;
+  }
+
+  &.xlong {
+    font-size: 7.5px;
+    letter-spacing: -0.03em;
+  }
 }
 
 .dir {
   position: absolute;
+  transition: rotate 0.6s ease-out;
   inset: 0;
   display: grid;
   place-items: start center;
@@ -50,22 +68,23 @@
 
   svg {
     fill: var(--pin);
-    stroke: var(--surface);
+    stroke: var(--pin-outline);
     stroke-width: 1.2;
     stroke-linejoin: round;
     filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.3));
   }
 }
 
-.halt {
-  position: absolute;
-  right: 7px;
-  bottom: 7px;
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--pin);
+.still {
+  opacity: 0.6;
+
+  &.dimmed {
+    opacity: 0.3;
+  }
+
+  .badge {
+    filter: grayscale(1);
+  }
 }
 
 .low_precision {

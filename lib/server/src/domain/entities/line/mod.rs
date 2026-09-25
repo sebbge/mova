@@ -9,12 +9,17 @@ pub struct Route {
   pub route_short_name: String,
   pub route_long_name: Option<String>,
   pub agency_id: Option<String>, // always 'STM-MVD'
+  /// Department with most of its stops
+  pub area: Option<String>,
 }
 
-///# GET <BONDI>/routes/:route_id/shape?direction_id=0|1
+///# GET <BONDI>/route/shape/:provider/:route_id?direction_id=0|1
+///# GET <BONDI>/shape/:provider/:shape_id
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RouteShape {
   pub route_id: String,
+  /// Drawn shape
+  pub shape_id: String,
   pub direction_id: i16,
   pub headsign: Option<String>,
   pub shape: serde_json::Value,
@@ -31,6 +36,8 @@ pub struct DirectionInfo {
 #[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct RouteStop {
   pub stop_id: String,
+  /// Shelter ref
+  pub cluster: String,
   pub stop_name: String,
   pub stop_sequence: i32,
   pub lat: f64,

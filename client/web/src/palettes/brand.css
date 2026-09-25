@@ -1,0 +1,12 @@
+:root {
+  --brand: #2fb152;
+
+  --brand-dark: hsl(from var(--brand) h calc(s * 0.45) 11%);
+  --brand-light: hsl(from var(--brand) h s 31%);
+  --brand-contrast: hsl(from var(--brand) h s 100%);
+
+  --map-outline: #ffffff;
+
+  --bus: #1565c0;
+  --walk: #757575;
+}

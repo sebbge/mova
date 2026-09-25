@@ -1,0 +1,11 @@
+/* delay and freshness never share a color */
+
+:root {
+  --meta-emissions: #4caf50;
+  --meta-thermal: #03a9f4;
+  --meta-access: #3667f7;
+
+  --freshness-live: #00b360;
+  --freshness-low: #f57c00;
+  --freshness-imprecise: #e53935;
+}

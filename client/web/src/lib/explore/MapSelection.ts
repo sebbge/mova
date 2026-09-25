@@ -1,182 +1,223 @@
-import {createEffect, createSignal, on, onCleanup, type Accessor, type Setter} from 'solid-js';
-import {api} from '~/lib/api/client';
-import type {Bus, BusRoute, RouteShape, Stop, StopLine} from '~/lib/api/types';
+import {createEffect, createSignal, onCleanup, type Accessor, type Setter} from 'solid-js';
+import type {Bus} from '~/lib/api/types';
+import {providerOf} from '~/lib/domain/providers';
 import {LineFeed} from '~/lib/line/LineFeed';
-import {ArrivalsSource} from '~/lib/stop/ArrivalsSource';
+import {StopFeed} from '~/lib/stop/StopFeed';
 import type {MapUrl} from './MapUrl';
 
-export class MapSelection {
-  static readonly PARAM = {stop: 'parada', line: 'linea', variant: 'v', direction: 'd', bus: 'bus'} as const;
+const P = {stop: 'parada', line: 'linea', variant: 'v', direction: 'd', shape: 's', bus: 'bus'} as const;
+const LINE_CLEARED = {[P.line]: null, [P.variant]: null, [P.direction]: null, [P.shape]: null};
 
-  readonly #stop: Accessor<Stop | null>;
-  readonly #setStop: Setter<Stop | null>;
-  readonly #arrivals: Accessor<ArrivalsSource | undefined>;
-  readonly #setArrivals: Setter<ArrivalsSource | undefined>;
-  readonly #line: Accessor<LineFeed | undefined>;
-  readonly #setLine: Setter<LineFeed | undefined>;
-  readonly #shape: Accessor<RouteShape | null>;
-  readonly #setShape: Setter<RouteShape | null>;
-  #directionHint: string | null = null; // tapped arrival's destination
+// self-corrections use replace, or back loops
+export class MapSelection {
+  readonly stops = new StopFeed();
+  readonly line = new LineFeed();
+
+  readonly #directionHint: Accessor<string | null>; // tapped arrival's destination
+  readonly #setDirectionHint: Setter<string | null>;
+  readonly #lineCompany: Accessor<string | undefined>; // not in the url
+  readonly #setLineCompany: Setter<string | undefined>;
+  readonly #knownName: Accessor<string | undefined>; // name the picker had
+  readonly #setKnownName: Setter<string | undefined>;
+  readonly #busFromStop: Accessor<boolean>;
+  readonly #setBusFromStop: Setter<boolean>;
+  readonly #lineFromBus: Accessor<string | null>;
+  readonly #setLineFromBus: Setter<string | null>;
 
   constructor(private readonly url: MapUrl) {
-    [this.#stop, this.#setStop] = createSignal<Stop | null>(null);
-    [this.#arrivals, this.#setArrivals] = createSignal<ArrivalsSource>();
-    [this.#line, this.#setLine] = createSignal<LineFeed>();
-    [this.#shape, this.#setShape] = createSignal<RouteShape | null>(null);
+    [this.#directionHint, this.#setDirectionHint] = createSignal<string | null>(null);
+    [this.#lineCompany, this.#setLineCompany] = createSignal<string>();
+    [this.#knownName, this.#setKnownName] = createSignal<string>();
+    [this.#busFromStop, this.#setBusFromStop] = createSignal(false);
+    [this.#lineFromBus, this.#setLineFromBus] = createSignal<string | null>(null);
 
-    createEffect(
-      on(
-        () => this.stopId,
-        (id) => {
-          this.#setStop(null);
-          this.#setArrivals(id ? new ArrivalsSource(id) : undefined);
-          if (!id) return;
-          const controller = new AbortController();
-          api
-            .stop(id, {signal: controller.signal})
-            .then((s) => this.#setStop(s))
-            .catch(() => {});
-          onCleanup(() => controller.abort());
-        }
-      )
+    createEffect(() => this.stops.follow(this.stopId));
+    onCleanup(() => this.stops.close());
+    createEffect(() => onCleanup(this.line.followVariants(this.lineId) ?? (() => {})));
+    createEffect(() =>
+      onCleanup(this.line.followBuses(this.routeId ? providerOf(this.routeId) : null, this.lineId) ?? (() => {}))
     );
-
-    createEffect(
-      on(
-        () => this.lineId,
-        (line) => this.#setLine(line ? new LineFeed(line) : undefined)
-      )
-    );
-
-    // by line number
     createEffect(() => {
-      const first = this.variants[0];
-      if (this.lineId && !this.routeId && first) this.url.select({[MapSelection.PARAM.variant]: first.route_id}, true);
+      const shapeRef = this.shapeRef;
+      const stop = shapeRef
+        ? this.line.followVariant(shapeRef, () => this.url.select({[P.shape]: null}, true))
+        : this.line.followShape(this.routeId, this.requestedDirection);
+      onCleanup(stop ?? (() => {}));
     });
 
-    createEffect(
-      on([() => this.routeId, () => this.requestedDirection], ([id, direction]) => {
-        this.#setShape(null);
-        if (!id) return;
-        const controller = new AbortController();
-        api
-          .routeShape(id, direction, {signal: controller.signal})
-          .then((s) => this.#setShape(s))
-          .catch(() => {});
-        onCleanup(() => controller.abort());
-      })
-    );
+    // exact shape -> route and direction
+    createEffect(() => {
+      const shape = this.line.shape;
+      const shapeRef = this.shapeRef;
+      if (!this.lineId || this.routeId || !shapeRef || !shape) return;
+      if (`${providerOf(shape.route_id)}-${shape.shape_id}` !== shapeRef) return;
+      this.url.select({[P.variant]: shape.route_id, [P.direction]: String(shape.direction_id)}, true);
+    });
+
+    // stop's provider variant, else first
+    createEffect(() => {
+      const variants = this.line.variants;
+      if (!this.lineId || this.routeId || this.shapeRef || variants.length === 0) return;
+      const stopProvider = this.stopId ? providerOf(this.stopId) : null;
+      const same = variants.find((v) => providerOf(v.route_id) === stopProvider);
+      this.url.select({[P.variant]: (same ?? variants[0]).route_id}, true);
+    });
 
     createEffect(() => {
-      const shape = this.#shape();
-      const hint = this.#directionHint?.toUpperCase();
-      if (!hint || !shape) return;
-      this.#directionHint = null;
+      const shape = this.line.shape;
+      const hint = this.#directionHint()?.toUpperCase();
+      if (!hint || !shape || !this.routeId) return;
+      this.#setDirectionHint(null);
       const match = shape.available_directions.find((d) => d.headsign?.toUpperCase() === hint);
       if (match && match.direction_id !== shape.direction_id) {
-        this.url.select({[MapSelection.PARAM.direction]: String(match.direction_id)});
+        this.url.select({[P.direction]: String(match.direction_id)}, true);
       }
     });
   }
 
   get stopId(): string | null {
-    return this.url.get(MapSelection.PARAM.stop);
+    return this.url.get(P.stop);
   }
 
   get lineId(): string | null {
-    return this.url.get(MapSelection.PARAM.line);
+    return this.url.get(P.line);
   }
 
   get routeId(): string | null {
-    return this.url.get(MapSelection.PARAM.variant);
+    return this.url.get(P.variant);
   }
 
   // without d the server decides (one-way routes)
   get requestedDirection(): number | undefined {
-    const d = this.url.get(MapSelection.PARAM.direction);
+    const d = this.url.get(P.direction);
     return d === null ? undefined : Number(d);
   }
 
   get busId(): string | null {
-    return this.url.get(MapSelection.PARAM.bus);
+    return this.url.get(P.bus);
   }
 
-  get stop(): Stop | null {
-    return this.#stop();
+  get shapeRef(): string | null {
+    return this.url.get(P.shape);
   }
 
-  get arrivals(): StopLine[] {
-    return this.#arrivals()?.lines ?? [];
+  get knownName(): string | undefined {
+    return this.#knownName();
   }
 
-  get loadingArrivals(): boolean {
-    return this.#arrivals()?.loading ?? false;
+  get lineCompany(): string | undefined {
+    return this.#lineCompany() ?? this.line.buses[0]?.company;
   }
 
-  get variants(): BusRoute[] {
-    return this.#line()?.variants ?? [];
-  }
-
-  get shape(): RouteShape | null {
-    return this.#shape();
-  }
-
-  get buses(): Bus[] {
-    return (this.lineId ? this.#line()?.buses : this.#arrivals()?.buses) ?? [];
+  // avoids flashing the other direction
+  get settlingLine(): boolean {
+    const shape = this.line.shape;
+    if (!shape || this.#directionHint() !== null) return true;
+    const requested = this.requestedDirection;
+    if (requested === undefined) return false;
+    const exists = shape.available_directions.some((d) => d.direction_id === requested);
+    return exists && shape.direction_id !== requested;
   }
 
   get selectedBus(): Bus | null {
     const id = this.busId;
-    return id ? (this.buses.find((b) => b.id === id) ?? null) : null;
+    if (!id) return null;
+    return this.#lineBuses().find((b) => b.id === id) ?? this.stops.buses.find((b) => b.id === id) ?? null;
+  }
+
+  get buses(): Bus[] {
+    const buses = this.#lineBuses();
+    const selected = this.selectedBus;
+    return selected && !buses.some((b) => b.id === selected.id) ? [...buses, selected] : buses;
   }
 
   get open(): boolean {
     return Boolean(this.stopId || this.lineId || this.selectedBus);
   }
 
-  get origin(): string | null {
-    const shape = this.#shape();
-    if (!shape) return null;
-
-    const headsign = shape.headsign?.toLowerCase();
-    if (headsign) {
-      const bus = this.#line()?.buses.find((b) => b.destination?.toLowerCase().startsWith(headsign));
-      if (bus?.origin) return bus.origin;
+  // no browser history
+  get back(): (() => void) | undefined {
+    if (this.busId) return () => this.closeBus();
+    const fromBus = this.#lineFromBus();
+    if (this.lineId && fromBus) {
+      return () => {
+        this.#setLineFromBus(null);
+        this.url.select({[P.bus]: fromBus});
+      };
     }
-
-    return shape.available_directions.find((d) => d.direction_id !== shape.direction_id)?.headsign ?? null;
+    if (this.lineId && this.stopId) return () => this.url.select(LINE_CLEARED);
+    return undefined;
   }
 
-  openStop(id: string) {
-    this.url.select({...this.#cleared(), [MapSelection.PARAM.stop]: id});
+  openStop(id: string, name?: string) {
+    this.#setKnownName(name);
+    this.#setBusFromStop(false);
+    this.#setLineFromBus(null);
+    this.url.select({[P.stop]: id, ...LINE_CLEARED, [P.bus]: null});
   }
 
-  openLine(line: string, destination?: string) {
-    this.#directionHint = destination ?? null;
-    this.url.select({...this.#cleared(), [MapSelection.PARAM.line]: line});
+  // brings its line
+  openBus(bus: Bus) {
+    const fromStop = this.lineId !== bus.line;
+    this.#setBusFromStop(fromStop);
+    if (!fromStop) {
+      this.url.select({[P.bus]: bus.id});
+      return;
+    }
+    const shape = bus.shape_id && this.stopId ? `${providerOf(this.stopId)}-${bus.shape_id}` : null;
+    this.#setDirectionHint(shape ? null : (bus.destination ?? null));
+    this.#setLineCompany(bus.company);
+    this.#setLineFromBus(null);
+    this.url.select({...LINE_CLEARED, [P.line]: bus.line, [P.shape]: shape, [P.bus]: bus.id});
+  }
+
+  showLine() {
+    this.#setLineFromBus(this.busId);
+    this.url.select({[P.bus]: null});
+  }
+
+  // same shelter, no history entry
+  switchService(id: string) {
+    this.url.select({[P.stop]: id}, true);
+  }
+
+  openLine(line: string, destination?: string, company?: string) {
+    this.#setDirectionHint(destination ?? null);
+    this.#setLineCompany(company);
+    this.#setLineFromBus(null);
+    this.url.select({...LINE_CLEARED, [P.line]: line, [P.bus]: null});
+  }
+
+  // live -> bus, scheduled -> line
+  openArrival(line: string, destination?: string, company?: string) {
+    const bus = this.stops.arrivals.find((l) => l.line === line)?.arrivals.find((a) => a.live && a.bus)?.bus;
+    if (bus) this.openBus(bus);
+    else this.openLine(line, destination, company);
   }
 
   selectVariant(routeId: string, direction?: number) {
     this.url.select({
-      [MapSelection.PARAM.variant]: routeId,
-      [MapSelection.PARAM.direction]: direction === undefined ? null : String(direction),
+      [P.variant]: routeId,
+      [P.direction]: direction === undefined ? null : String(direction),
+      [P.shape]: null,
     });
   }
 
-  selectBus(bus: Bus) {
-    this.url.select({[MapSelection.PARAM.bus]: bus.id});
+  deselectBus() {
+    if (this.busId) this.url.select({[P.bus]: null});
   }
 
-  deselectBus() {
-    if (this.busId) this.url.select({[MapSelection.PARAM.bus]: null});
+  closeBus() {
+    if (this.#busFromStop()) this.url.select({...LINE_CLEARED, [P.bus]: null});
+    else this.url.select({[P.bus]: null});
   }
 
   close() {
-    if (this.busId) this.deselectBus();
-    else this.url.select(this.#cleared());
+    if (this.busId) this.closeBus();
+    else this.url.select({[P.stop]: null, ...LINE_CLEARED, [P.bus]: null});
   }
 
-  #cleared(): Record<string, null> {
-    return Object.fromEntries(Object.values(MapSelection.PARAM).map((key) => [key, null]));
+  #lineBuses(): Bus[] {
+    return this.lineId ? this.line.buses : this.stops.buses;
   }
 }

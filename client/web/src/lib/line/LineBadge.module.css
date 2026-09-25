@@ -2,11 +2,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--badge);
-  color: var(--brand-contrast);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  border-radius: var(--radius-sm);
   letter-spacing: 0.01em;
 }
 
@@ -19,5 +16,32 @@
 .sm {
   min-width: 2.5rem;
   padding: 2px var(--space-1);
-  font-size: 0.875rem;
+  font-size: 1.15rem;
+}
+
+.pill {
+  background: var(--badge);
+  color: var(--brand-contrast);
+  border-radius: var(--radius-sm);
+}
+
+.flat {
+  justify-content: flex-start;
+  border-left: 1px solid var(--badge);
+  color: inherit;
+
+  &.sm {
+    padding-left: var(--space-2);
+  }
+}
+
+.plain {
+  justify-content: flex-start;
+  color: inherit;
+
+  &.md {
+    min-width: 0;
+    padding-left: 0;
+    font-size: 1.35rem;
+  }
 }

@@ -1,0 +1,26 @@
+:root {
+  --service-urban: #2d487f;
+  --service-suburban: #2f7a63;
+  --service-inter: #bc6b23;
+
+  --service-urban-header: hsl(from var(--service-urban) h calc(s * 0.75) 19%);
+  --service-urban-list: hsl(from var(--service-urban) h calc(s * 0.4) 10%);
+  --service-urban-outline: hsl(from var(--service-urban) h calc(s * 0.85) 50%);
+
+  --service-suburban-header: hsl(from var(--service-suburban) h calc(s * 0.75) 19%);
+  --service-suburban-list: hsl(from var(--service-suburban) h calc(s * 0.4) 10%);
+  --service-suburban-outline: hsl(from var(--service-suburban) h calc(s * 0.85) 50%);
+
+  --service-inter-header: hsl(from var(--service-inter) h calc(s * 0.75) 19%);
+  --service-inter-list: hsl(from var(--service-inter) h calc(s * 0.4) 10%);
+  --service-inter-outline: hsl(from var(--service-inter) h calc(s * 0.85) 50%);
+
+  --service-on: #ffffff;
+  --service-on-muted: #a6aebd;
+  --service-divider: rgb(255 255 255 / 0.07);
+  --service-hover: rgb(255 255 255 / 0.05);
+
+  --skeleton-on-tint: rgb(255 255 255 / 0.18);
+  --skeleton-on-tint-sheen: rgb(255 255 255 / 0.34);
+  --scrollbar-on-tint: rgb(255 255 255 / 0.2);
+}

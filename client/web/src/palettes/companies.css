@@ -1,0 +1,21 @@
+:root {
+  --company-cutcsa: #3798a7;
+  --company-cutcsa-header: color-mix(in srgb, var(--company-cutcsa) 24%, #0b0d10);
+  --company-cutcsa-list: color-mix(in srgb, var(--company-cutcsa) 9%, #0b0d10);
+  --company-cutcsa-outline: hsl(from var(--company-cutcsa) h calc(s * 0.85) calc(l + 18));
+
+  --company-come: #318634;
+  --company-come-header: color-mix(in srgb, var(--company-come) 24%, #0b0d10);
+  --company-come-list: color-mix(in srgb, var(--company-come) 9%, #0b0d10);
+  --company-come-outline: hsl(from var(--company-come) h calc(s * 0.85) calc(l + 18));
+
+  --company-ucot: #d4bc3f;
+  --company-ucot-header: color-mix(in srgb, var(--company-ucot) 24%, #0b0d10);
+  --company-ucot-list: color-mix(in srgb, var(--company-ucot) 9%, #0b0d10);
+  --company-ucot-outline: hsl(from var(--company-ucot) h calc(s * 0.85) calc(l + 18));
+
+  --company-coetc: #901b1b;
+  --company-coetc-header: color-mix(in srgb, var(--company-coetc) 24%, #0b0d10);
+  --company-coetc-list: color-mix(in srgb, var(--company-coetc) 9%, #0b0d10);
+  --company-coetc-outline: hsl(from var(--company-coetc) h calc(s * 0.85) calc(l + 18));
+}

@@ -1,36 +1,49 @@
 use super::{Bus, Headsigns, Line};
+use crate::domain::scope::Scope;
 
 //- cache
 use crate::cache::CacheRw;
 impl Line {
   const TTL: u64 = 10;
 
-  fn buses_key(line_id: &str) -> String {
-    format!("realtime:buses:{line_id}")
+  /// Per provider and region
+  fn buses_key(region: &str, provider: &str, line_id: &str) -> String {
+    crate::cache::key(region, &format!("rt:{provider}:buses:{line_id}"))
   }
 
-  pub async fn cache_get(cache: &crate::Cache, line_id: &str) -> Option<Self> {
-    let buses: Vec<Bus> = cache.get(&Self::buses_key(line_id)).await?;
+  pub async fn cache_get(cache: &crate::Cache, region: &str, provider: &str, line_id: &str) -> Option<Self> {
+    let buses: Vec<Bus> = cache.get(&Self::buses_key(region, provider, line_id)).await?;
     let destination = buses.first().map(|b| b.destination.clone()).unwrap_or_default();
     let company = buses.first().map(|b| b.company.clone()).unwrap_or_default();
     Some(Self { line_id: line_id.to_string(), buses, company, destination })
   }
 
-  pub async fn cache_set(cache: &crate::Cache, line_id: &str, buses: &[Bus]) {
-    cache.set(&Self::buses_key(line_id), &buses, Self::TTL).await;
+  pub async fn cache_set(cache: &crate::Cache, region: &str, provider: &str, line_id: &str, buses: &[Bus]) {
+    cache.set(&Self::buses_key(region, provider, line_id), &buses, Self::TTL).await;
   }
 
   //
-  fn headsign_key(route_short_name: &str) -> String {
-    format!("headsigns:{route_short_name}")
+  fn headsign_key(region: &str, provider: &str, route_short_name: &str) -> String {
+    crate::cache::key(region, &format!("headsigns:{provider}:{route_short_name}"))
   }
 
-  pub async fn get_headsigns_cache(cache: &crate::Cache, route_short_name: &str) -> Option<Headsigns> {
-    cache.get(&Self::headsign_key(route_short_name)).await
+  pub async fn get_headsigns_cache(
+    cache: &crate::Cache,
+    region: &str,
+    provider: &str,
+    route_short_name: &str,
+  ) -> Option<Headsigns> {
+    cache.get(&Self::headsign_key(region, provider, route_short_name)).await
   }
 
-  pub async fn set_headsigns_cache(cache: &crate::Cache, route_short_name: &str, hs: &Headsigns) {
-    cache.set(&Self::headsign_key(route_short_name), hs, cache.until_sync()).await;
+  pub async fn set_headsigns_cache(
+    cache: &crate::Cache,
+    region: &str,
+    provider: &str,
+    route_short_name: &str,
+    hs: &Headsigns,
+  ) {
+    cache.set(&Self::headsign_key(region, provider, route_short_name), hs, cache.until_sync()).await;
   }
 }
 
@@ -50,6 +63,7 @@ pub struct HeadsignRow {
 impl Line {
   pub(super) async fn query_bearings(
     db: &crate::Db,
+    scope: &Scope,
     line: &str,
     ids: &[String],
     lats: &[f64],
@@ -64,7 +78,9 @@ impl Line {
         FROM routes r
         JOIN trips  t  ON t.route_id  = r.route_id
         JOIN shapes sh ON sh.shape_id = t.shape_id
-        WHERE r.route_short_name = $1
+        WHERE r.region = $6 AND t.region = $6 AND sh.region = $6
+          AND r.provider = $7 AND t.provider = $7 AND sh.provider = $7
+          AND r.route_short_name = $1
           AND t.direction_id IS NOT NULL
         ORDER BY t.shape_id
     ),
@@ -101,19 +117,36 @@ impl Line {
             ls.shape::geography,
             ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography
         )"#;
-    sqlx::query_as(q).bind(line).bind(ids).bind(lats).bind(lngs).bind(dests).fetch_all(db).await.unwrap_or_default()
+    sqlx::query_as(q)
+      .bind(line)
+      .bind(ids)
+      .bind(lats)
+      .bind(lngs)
+      .bind(dests)
+      .bind(&scope.region)
+      .bind(&scope.provider)
+      .fetch_all(db)
+      .await
+      .unwrap_or_default()
   }
 
-  pub(super) async fn query_headsigns(db: &crate::Db, route_short_name: &str) -> Vec<HeadsignRow> {
+  pub(super) async fn query_headsigns(db: &crate::Db, scope: &Scope, route_short_name: &str) -> Vec<HeadsignRow> {
     let q = r#"
       SELECT DISTINCT t.direction_id, t.trip_headsign
       FROM trips t
       JOIN routes r ON r.route_id = t.route_id
-      WHERE r.route_short_name = $1
+      WHERE r.region = $2 AND t.region = $2 AND r.provider = $3 AND t.provider = $3
+        AND r.route_short_name = $1
         AND t.direction_id IS NOT NULL
         AND t.trip_headsign IS NOT NULL
       ORDER BY t.direction_id, t.trip_headsign
       "#;
-    sqlx::query_as(q).bind(route_short_name).fetch_all(db).await.unwrap_or_default()
+    sqlx::query_as(q)
+      .bind(route_short_name)
+      .bind(&scope.region)
+      .bind(&scope.provider)
+      .fetch_all(db)
+      .await
+      .unwrap_or_default()
   }
 }

@@ -1,29 +1,39 @@
 import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import type {RouteShape} from '~/lib/api/types';
-import {chevronImage} from '~/lib/map/images/chevron';
+import {CHEVRON_PIXEL_RATIO, chevronImage} from '~/lib/map/images/chevron';
+import {brand} from '~/lib/map/paint';
 
 const SOURCE = 'route';
 const CHEVRON = 'route-chevron';
 
-// chevrons as the stroke
 export const routeLayer = {
-  add(map: MapLibreMap) {
-    if (map.getSource(SOURCE)) return;
-
+  addSource(map: MapLibreMap) {
     const chevron = chevronImage();
-    if (chevron && !map.hasImage(CHEVRON)) map.addImage(CHEVRON, chevron);
-
+    if (chevron && !map.hasImage(CHEVRON)) map.addImage(CHEVRON, chevron, {pixelRatio: CHEVRON_PIXEL_RATIO});
     map.addSource(SOURCE, {type: 'geojson', data: features(null)});
+  },
+
+  addLayers(map: MapLibreMap) {
+    map.addLayer({
+      id: 'route-line',
+      type: 'line',
+      source: SOURCE,
+      layout: {'line-cap': 'round', 'line-join': 'round'},
+      paint: {
+        'line-color': brand(),
+        'line-width': ['interpolate', ['linear'], ['zoom'], 11, 6, 14, 11, 17, 18],
+      },
+    });
     map.addLayer({
       id: 'route-chevrons',
       type: 'symbol',
       source: SOURCE,
       layout: {
         'symbol-placement': 'line',
-        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 11, 12, 14, 15, 17, 18],
+        'symbol-spacing': ['interpolate', ['linear'], ['zoom'], 11, 5, 14, 9, 17, 14],
         'icon-image': CHEVRON,
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.55, 14, 0.8, 17, 1.05],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.35, 14, 0.6, 17, 1],
         'icon-rotation-alignment': 'map',
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,

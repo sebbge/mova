@@ -4,12 +4,8 @@ use entities::line::{Route, RouteShape};
 
 ///# GET <BONDI>/routes
 pub async fn list(State(state): State<crate::State>) -> crate::Res<Vec<Route>> {
-  if let Some(cached) = Route::cache_get_list(&state.cache).await {
-    return Ok(Json(cached));
-  }
-
-  let routes = Route::list(&state.db).await?;
-  Route::cache_set_list(&state.cache, &routes).await;
+  let region = state.region()?;
+  let routes = Route::load_list(&state, &region).await?;
 
   tracing::info!(count = routes.len(), "GET 200 /routes");
   Ok(Json(routes))
@@ -21,12 +17,8 @@ pub async fn search(State(state): State<crate::State>, Query(params): Query<Sear
     return Err(crate::Error::BadRequest("q must not be empty".into()));
   }
 
-  if let Some(cached) = Route::cache_get_search(&state.cache, &params.q).await {
-    return Ok(Json(cached));
-  }
-
-  let routes = Route::search(&state.db, &params.q).await?;
-  Route::cache_set_search(&state.cache, &params.q, &routes).await;
+  let region = state.region()?;
+  let routes = Route::load_search(&state, &region, &params.q).await?;
   tracing::info!(term = params.q, "GET 200 /routes/search");
   Ok(Json(routes))
 }
@@ -36,21 +28,28 @@ pub struct SearchQuery {
   pub q: String,
 }
 
-///# GET <BONDI>/routes/:route_id/shape?direction_id=0
+///# GET <BONDI>/route/shape/:provider/:id?direction_id=0
 pub async fn shape(
   State(state): State<crate::State>,
-  Path(route_id): Path<String>,
+  Path((provider, route_id)): Path<(String, String)>,
   Query(params): Query<ShapeQuery>,
 ) -> crate::Res<RouteShape> {
+  let scope = state.resolve(&provider)?;
   let direction = params.direction_id.unwrap_or(0);
 
-  if let Some(cached) = RouteShape::cache_get(&state.cache, &route_id, direction).await {
-    return Ok(Json(cached));
-  }
+  let shape = RouteShape::load(&state, &scope, &route_id, direction).await?;
+  tracing::info!(provider, route_id, dir = direction, "GET 200 /route/shape/:provider/:id");
+  Ok(Json(shape))
+}
 
-  let shape = RouteShape::get(&state.db, &route_id, direction).await?;
-  RouteShape::cache_set(&state.cache, &shape.route_id, direction, &shape).await;
-  tracing::info!(route_id = route_id, dir = direction, "GET 200 /routes/:route_id/shape");
+///# GET <BONDI>/shape/:provider/:id
+pub async fn variant(
+  State(state): State<crate::State>,
+  Path((provider, shape_id)): Path<(String, String)>,
+) -> crate::Res<RouteShape> {
+  let scope = state.resolve(&provider)?;
+  let shape = RouteShape::load_by_shape(&state, &scope, &shape_id).await?;
+  tracing::info!(provider, shape_id, "GET 200 /shape/:provider/:id");
   Ok(Json(shape))
 }
 

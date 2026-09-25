@@ -1,8 +1,9 @@
 import {For, Show} from 'solid-js';
 import type {Bus, BusFreshness} from '~/lib/api/types';
 import LineBadge from '~/lib/line/LineBadge';
-import {freshnessVar} from '~/lib/ui/palette';
+import {companyTint, freshnessVar} from '~/lib/ui/palette';
 import parts from '~/lib/ui/sheet/parts.module.css';
+import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import styles from './BusSheet.module.css';
 
 const CONFIDENCE: Record<BusFreshness, string> = {
@@ -11,52 +12,56 @@ const CONFIDENCE: Record<BusFreshness, string> = {
   imprecise: 'Última posición conocida',
 };
 
-export default function BusSheet(props: {bus: Bus; onSelectLine?: (line: string, destination?: string) => void}) {
+export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
+  const tint = () => companyTint(props.bus.company);
   const tags = () =>
     [props.bus.access, props.bus.emissions, props.bus.thermal_comfort].filter((t): t is string => Boolean(t));
 
   return (
     <>
-      <header class={parts.header}>
-        <LineBadge line={props.bus.line} company={props.bus.company} />
-        <div class={parts.meta}>
-          <span class={parts.title}>{props.bus.destination ?? `Línea ${props.bus.line}`}</span>
-          <Show when={props.bus.origin}>
-            <span class={parts.sub}>desde {props.bus.origin}</span>
-          </Show>
-        </div>
-      </header>
+      <div class={parts.band} style={{'--sheet-header-bg': tint().header}}>
+        <SheetHeader
+          title={props.bus.destination ?? `Línea ${props.bus.line}`}
+          subtitle={props.bus.origin ? `desde ${props.bus.origin}` : ''}
+          lead={<LineBadge line={props.bus.line} variant='plain' />}
+        />
+      </div>
 
-      <dl class={styles.facts}>
-        <div>
-          <dt>Estado</dt>
-          <dd style={{color: freshnessVar(true, props.bus.freshness)}}>{CONFIDENCE[props.bus.freshness]}</dd>
-        </div>
-        <div>
-          <dt>Velocidad</dt>
-          <dd>{props.bus.still ? 'Detenido' : `${Math.round(props.bus.speed)} km/h`}</dd>
-        </div>
-        <div>
-          <dt>Empresa</dt>
-          <dd>{props.bus.company}</dd>
-        </div>
-        <div>
-          <dt>Unidad</dt>
-          <dd>{props.bus.id}</dd>
-        </div>
-      </dl>
+      <div class={`${styles.content} ${parts.onTint} sheet-scroll`} style={{'--list': tint().list}}>
+        <p class={styles.state} style={{'--dot': freshnessVar(true, props.bus.freshness)}}>
+          <span class={styles.dot} aria-hidden='true' />
+          {CONFIDENCE[props.bus.freshness]}
+        </p>
 
-      <Show when={tags().length > 0}>
-        <ul class={styles.tags}>
-          <For each={tags()}>{(tag) => <li>{tag}</li>}</For>
-        </ul>
-      </Show>
+        <dl class={styles.facts}>
+          <div>
+            <dt>Velocidad</dt>
+            <dd>{props.bus.still ? 'Detenido' : `${Math.round(props.bus.speed)} km/h`}</dd>
+          </div>
+          <div>
+            <dt>Empresa</dt>
+            <dd>{props.bus.company || '—'}</dd>
+          </div>
+          <div>
+            <dt>Unidad</dt>
+            <dd class={styles.unit}>{props.bus.unit}</dd>
+          </div>
+        </dl>
 
-      <button
-        class={parts.full}
-        onClick={() => props.onSelectLine?.(props.bus.line, props.bus.destination ?? undefined)}>
-        Ver el recorrido de la línea {props.bus.line}
-      </button>
+        <Show when={tags().length > 0}>
+          <ul class={styles.tags}>
+            <For each={tags()}>{(tag) => <li>{tag}</li>}</For>
+          </ul>
+        </Show>
+
+        <Show when={props.onShowLine}>
+          {(onShowLine) => (
+            <button class={styles.line} onClick={() => onShowLine()()}>
+              Ver línea completa
+            </button>
+          )}
+        </Show>
+      </div>
     </>
   );
 }

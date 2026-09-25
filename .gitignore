@@ -6,4 +6,6 @@ dist
 
 # map tiles
 client/web/public/tiles/*.pmtiles
+
+__pycache__
 gtfs_example.zip

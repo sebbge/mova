@@ -1,40 +1,64 @@
 // https://api.montevideo.gub.uy/apidocs/publictransport
-#![allow(unused)]
+use crate::core::bus::{BusEntry, UpcomingArrival};
+use crate::core::format;
 use crate::core::geo::Point;
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer};
 
 // common bus fields
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StmBus {
   pub bus_id: u32,
 
-  // "company" in /buses/.../upcomingbuses, "companyName" in /buses
-  #[serde(alias = "companyName")]
+  #[serde(alias = "companyName", default, deserialize_with = "deser_nullable")]
   pub company: String,
 
-  #[serde(deserialize_with = "deser_line")]
+  #[serde(default, deserialize_with = "deser_line")]
   pub line: String,
-
-  pub line_variant_id: u32,
-  pub special: bool,
 
   #[serde(deserialize_with = "deser_point")]
   pub location: Point,
 
-  pub origin: String,
-  pub destination: String,
-  pub subline: String,
+  pub line_variant_id: Option<u32>,
+  pub origin: Option<String>,
+  pub destination: Option<String>,
 
-  pub emissions: StmBusEmissions,
-  pub thermal_confort: StmBusAC,
-  pub access: StmBusAccess,
+  // CO2 emissions
+  #[serde(default, deserialize_with = "deser_label")]
+  pub emissions: Option<String>,
+  // AC unit
+  #[serde(default, deserialize_with = "deser_label")]
+  pub thermal_confort: Option<String>,
+  // accessibility
+  #[serde(default, deserialize_with = "deser_label")]
+  pub access: Option<String>,
+}
+
+impl From<StmBus> for BusEntry {
+  fn from(bus: StmBus) -> Self {
+    BusEntry {
+      id: BusEntry::identity(&bus.company, &bus.bus_id.to_string()),
+      unit: bus.bus_id.to_string(),
+      line: bus.line,
+      company: bus.company,
+      location: bus.location,
+      speed: None,
+      shape_id: bus.line_variant_id.map(|v| v.to_string()),
+      origin: bus.origin.as_deref().map(format::place_name),
+      destination: bus.destination.as_deref().map(format::place_name),
+      timestamp: None,
+      access: bus.access,
+      emissions: bus.emissions,
+      thermal_comfort: bus.thermal_confort,
+      delay_min: None,
+    }
+  }
 }
 
 ///# GET <MVD>/buses/busstops/{stop_id}/upcomingbuses
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StmUpcomingBus {
   #[serde(flatten)]
@@ -43,6 +67,12 @@ pub struct StmUpcomingBus {
   pub eta: Option<i64>, // s
   pub distance: Option<i64>,
   pub position: Option<i64>,
+}
+
+impl From<StmUpcomingBus> for UpcomingArrival {
+  fn from(im: StmUpcomingBus) -> Self {
+    UpcomingArrival { eta_s: im.eta, distance_m: im.distance, position: im.position, bus: im.bus.into() }
+  }
 }
 
 ///# GET <MVD>/buses?lines={lines}
@@ -55,111 +85,20 @@ pub struct StmLineBus {
   #[serde(deserialize_with = "deser_timestamp")]
   pub timestamp: Option<DateTime<Utc>>,
   pub speed: Option<f64>,
-  pub e_type: Option<String>,
+}
+
+impl From<StmLineBus> for BusEntry {
+  fn from(im: StmLineBus) -> Self {
+    BusEntry { speed: im.speed, timestamp: im.timestamp, ..im.bus.into() }
+  }
 }
 
 #[derive(Debug, Deserialize)]
-pub struct StmGeo {
-  pub coordinates: Vec<f64>,
+struct StmGeo {
+  coordinates: Vec<f64>,
 
   #[serde(rename = "type")]
-  pub geo_type: Option<String>,
-}
-fn point_from(geo: StmGeo) -> Result<Point, &'static str> {
-  match geo.geo_type.as_deref() {
-    Some("Point") if geo.coordinates.len() == 2 => Ok(Point { lat: geo.coordinates[1], lng: geo.coordinates[0] }),
-    Some("Point") => Err("coordenadas inválidas, se espera [lng, lat]"),
-    _ => Err("tipo de geometría no soportado"),
-  }
-}
-
-//- bus info
-
-// CO2 emissions
-#[derive(Debug)]
-pub enum StmBusEmissions {
-  NoData,
-  Details(String),
-}
-impl<'de> Deserialize<'de> for StmBusEmissions {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let raw = String::deserialize(deserializer)?;
-    Ok(match raw.to_lowercase().as_str() {
-      "sin datos" => StmBusEmissions::NoData,
-      _ => StmBusEmissions::Details(raw),
-    })
-  }
-}
-
-impl StmBusEmissions {
-  pub fn label(&self) -> Option<String> {
-    match self {
-      StmBusEmissions::NoData => None,
-      StmBusEmissions::Details(s) => Some(crate::core::text::sentence_case(s)),
-    }
-  }
-}
-
-// AC unit
-#[derive(Debug)]
-pub enum StmBusAC {
-  NoData,
-  Details(String),
-}
-impl<'de> Deserialize<'de> for StmBusAC {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let raw = String::deserialize(deserializer)?;
-    Ok(match raw.to_lowercase().as_str() {
-      "sin datos" => StmBusAC::NoData,
-      _ => StmBusAC::Details(raw),
-    })
-  }
-}
-
-impl StmBusAC {
-  pub fn label(&self) -> Option<String> {
-    match self {
-      StmBusAC::NoData => None,
-      StmBusAC::Details(s) => Some(crate::core::text::sentence_case(s)),
-    }
-  }
-}
-
-// accessibility
-#[derive(Debug)]
-pub enum StmBusAccess {
-  NoData,
-  Common,
-  Details(String),
-}
-impl<'de> Deserialize<'de> for StmBusAccess {
-  fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-  where
-    D: serde::Deserializer<'de>,
-  {
-    let raw = String::deserialize(deserializer)?;
-    Ok(match raw.to_lowercase().as_str() {
-      "sin datos" => StmBusAccess::NoData,
-      "común" | "comun" => StmBusAccess::Common,
-      _ => StmBusAccess::Details(raw),
-    })
-  }
-}
-
-impl StmBusAccess {
-  pub fn label(&self) -> Option<String> {
-    match self {
-      StmBusAccess::NoData => None,
-      StmBusAccess::Common => None,
-      StmBusAccess::Details(s) => Some(crate::core::text::sentence_case(s)),
-    }
-  }
+  geo_type: Option<String>,
 }
 
 // desers
@@ -175,10 +114,29 @@ fn deser_timestamp<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<
 }
 
 fn deser_line<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
-  Ok(crate::names::line_name(&String::deserialize(d)?))
+  Ok(Option::<String>::deserialize(d)?.map(|raw| format::line_name(&raw)).unwrap_or_default())
+}
+
+fn deser_label<'de, D: Deserializer<'de>>(d: D) -> Result<Option<String>, D::Error> {
+  let raw = Option::<String>::deserialize(d)?;
+  Ok(
+    raw
+      .filter(|s| !matches!(s.trim().to_lowercase().as_str(), "" | "sin datos" | "común" | "comun"))
+      .map(|s| format::sentence_case(&s)),
+  )
+}
+
+fn deser_nullable<'de, D: Deserializer<'de>, T: Deserialize<'de> + Default>(d: D) -> Result<T, D::Error> {
+  Ok(Option::<T>::deserialize(d)?.unwrap_or_default())
 }
 
 fn deser_point<'de, D: Deserializer<'de>>(d: D) -> Result<Point, D::Error> {
   use serde::de::Error;
-  point_from(StmGeo::deserialize(d)?).map_err(D::Error::custom)
+
+  let geo = StmGeo::deserialize(d)?;
+  match (geo.geo_type.as_deref(), geo.coordinates.as_slice()) {
+    (Some("Point"), &[lng, lat]) => Ok(Point { lat, lng }),
+    (Some("Point"), _) => Err(D::Error::custom("invalid coordinates, expected [lng, lat]")),
+    _ => Err(D::Error::custom("unsupported geometry type")),
+  }
 }
