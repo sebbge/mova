@@ -1,0 +1,15 @@
+.credit {
+  margin: 0;
+  padding: var(--space-2) var(--gutter);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+
+  a {
+    color: inherit;
+  }
+}
+
+.tinted {
+  border-top: 1px solid var(--service-divider);
+  color: var(--service-on-muted);
+}

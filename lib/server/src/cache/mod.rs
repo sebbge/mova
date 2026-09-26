@@ -23,6 +23,8 @@ impl Cache {
 }
 
 /// Region prefix
+pub const SHARED: &str = "all";
+
 pub fn key(region: &str, rest: &str) -> String {
   format!("{region}:{rest}")
 }
@@ -91,8 +93,10 @@ pub trait Flush {
 
 impl Flush for Cache {
   async fn flush_region(&self, region: crate::core::region::Region) {
-    if let Err(e) = self.drop_prefix(&format!("{region}:")).await {
-      tracing::warn!(region = %region, error = %e, "[cache] couldn't flush region")
+    for prefix in [region.id(), SHARED] {
+      if let Err(e) = self.drop_prefix(&format!("{prefix}:")).await {
+        tracing::warn!(prefix, error = %e, "[cache] couldn't flush region")
+      }
     }
   }
 }

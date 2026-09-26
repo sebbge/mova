@@ -304,6 +304,7 @@ dependencies = [
  "axum",
  "brotli",
  "chrono",
+ "citymob-busmatick",
  "citymob-core",
  "citymob-dnt",
  "citymob-stm",
@@ -320,6 +321,21 @@ dependencies = [
  "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "citymob-busmatick"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "citymob-core",
+ "futures-util",
+ "gtfs-structures",
+ "reqwest",
+ "tokio",
+ "tracing",
+ "zip",
 ]
 
 [[package]]
@@ -341,7 +357,9 @@ name = "citymob-dnt"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "chrono",
  "citymob-core",
+ "gtfs-structures",
  "reqwest",
  "serde",
  "serde_json",

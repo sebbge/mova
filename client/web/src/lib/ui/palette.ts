@@ -1,6 +1,15 @@
 import type {BusFreshness} from '~/lib/api/types';
 
-const COMPANIES = ['CUTCSA', 'COME', 'UCOT', 'COETC'];
+const COMPANIES: Record<string, string> = {
+  CUTCSA: 'cutcsa',
+  COME: 'come',
+  UCOT: 'ucot',
+  COETC: 'coetc',
+  CODESA: 'codesa',
+  'MALDONADO TURISMO': 'mdoturismo',
+  MICRO: 'micro',
+  'SOL ANTIGUA': 'solantigua',
+};
 
 const FRESHNESS: Record<BusFreshness, string> = {
   live: 'var(--freshness-live)',
@@ -8,9 +17,8 @@ const FRESHNESS: Record<BusFreshness, string> = {
   imprecise: 'var(--freshness-imprecise)',
 };
 
-function companySlug(company: string | undefined): string | undefined {
-  const name = company?.toUpperCase();
-  return name && COMPANIES.includes(name) ? name.toLowerCase() : undefined;
+export function companySlug(company: string | undefined): string | undefined {
+  return company ? COMPANIES[company.toUpperCase()] : undefined;
 }
 
 export function companyVar(company: string | undefined): string {

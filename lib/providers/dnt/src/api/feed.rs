@@ -37,7 +37,7 @@ pub fn rebuild(zip_bytes: Vec<u8>, shapes: Vec<Shape>) -> Result<Vec<u8>> {
   Ok(cursor.into_inner())
 }
 
-fn write_entry(
+pub(super) fn write_entry(
   out: &mut zip::ZipWriter<Cursor<Vec<u8>>>,
   name: &str,
   bytes: &[u8],

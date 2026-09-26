@@ -8,7 +8,8 @@ pub struct Route {
   pub route_id: String,
   pub route_short_name: String,
   pub route_long_name: Option<String>,
-  pub agency_id: Option<String>, // always 'STM-MVD'
+  pub agency_id: Option<String>,
+  pub region: String,
   /// Department with most of its stops
   pub area: Option<String>,
 }
@@ -19,7 +20,7 @@ pub struct Route {
 pub struct RouteShape {
   pub route_id: String,
   /// Drawn shape
-  pub shape_id: String,
+  pub shape_id: Option<String>,
   pub direction_id: i16,
   pub headsign: Option<String>,
   pub shape: serde_json::Value,

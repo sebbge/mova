@@ -1,5 +1,5 @@
 import {For, Match, onCleanup, Switch} from 'solid-js';
-import {eta} from '~/lib/format';
+import {arrivalLabel, arrivalTitle} from '~/lib/format';
 import {freshnessVar} from '~/lib/ui/palette';
 import styles from './Arrivals.module.css';
 import {ArrivalsSource} from './ArrivalsSource';
@@ -29,8 +29,8 @@ export default function Arrivals(props: {stopId: string}) {
                           class={styles.eta}
                           classList={{[styles.first]: i() === 0}}
                           style={{color: freshnessVar(arrival.live, arrival.bus?.freshness)}}
-                          title={arrival.live ? 'Posición en vivo' : 'Horario de planilla'}>
-                          {eta(arrival.eta)}
+                          title={arrivalTitle(arrival)}>
+                          {arrivalLabel(arrival)}
                         </span>
                       )}
                     </For>

@@ -27,13 +27,16 @@ const FOLLOW_MS = 600;
 export default function MapCanvas(props: {
   camera: MapCamera;
   shape: RouteShape | null; // one direction
+  routeCompany?: string;
   buses: Bus[];
   selectedStopId: string | null;
   selectedSiblings: readonly string[];
+  selectedStop?: {stop_id: string; lat: number; lng: number} | null; // camera before its region loads
   followBusId: string | null;
   onSelectStop?: (stopId: string, stopName?: string) => void;
   onSelectBus?: (bus: Bus) => void;
   onBackground?: () => void;
+  onView?: (center: {lng: number; lat: number}, km2: number) => void;
 }) {
   let container!: HTMLDivElement;
   const [map, setMap] = createSignal<MapLibreMap>();
@@ -79,13 +82,15 @@ export default function MapCanvas(props: {
       routeLayer.addSource(instance);
       stopsLayer.addImages(instance);
       stopsLayer.add(instance, 'stops');
-      routeLayer.addLayers(instance);
+      routeLayer.addLayers(instance, props.routeCompany);
       stopsLayer.add(instance, 'route-stops');
     };
 
+    /* eslint-disable solid/reactivity -- maplibre event handlers read props when they fire */
     const onView = () => {
       const bounds = instance.getBounds();
       setViewKm2(viewportKm2(bounds));
+      props.onView?.(instance.getCenter(), viewKm2());
       void stops.load(regionsInView(bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()));
     };
 
@@ -99,7 +104,6 @@ export default function MapCanvas(props: {
     });
     instance.on('moveend', onView);
 
-    /* eslint-disable solid/reactivity -- maplibre event handlers read props when they fire */
     for (const layer of stopsLayer.HITS) {
       instance.on('click', layer, (e) => {
         const p = e.features?.[0]?.properties;
@@ -142,6 +146,11 @@ export default function MapCanvas(props: {
 
   createEffect(() => {
     const m = map();
+    if (m) routeLayer.paint(m, props.routeCompany);
+  });
+
+  createEffect(() => {
+    const m = map();
     if (!m) return;
     const shape = props.shape;
     const onRoute = new Set(shape?.stops.map((s) => s.cluster) ?? []);
@@ -160,7 +169,8 @@ export default function MapCanvas(props: {
     const m = map();
     if (!m || !props.shape || props.followBusId) return;
     const bounds = new LngLatBounds();
-    for (const [lng, lat] of props.shape.shape.coordinates) bounds.extend([lng, lat]);
+    const points = props.shape.shape?.coordinates ?? props.shape.stops.map((p) => [p.lng, p.lat]);
+    for (const [lng, lat] of points) bounds.extend([lng, lat]);
     if (!overlaps(m.getBounds(), bounds)) m.panTo(bounds.getCenter(), {duration: CAMERA_MS});
   });
 
@@ -168,7 +178,8 @@ export default function MapCanvas(props: {
     const m = map();
     const id = props.selectedStopId;
     if (!m || !id) return;
-    const stop = stops.find(id) ?? props.shape?.stops.find((s) => s.stop_id === id);
+    const known = props.selectedStop?.stop_id === id ? props.selectedStop : undefined;
+    const stop = stops.find(id) ?? props.shape?.stops.find((s) => s.stop_id === id) ?? known;
     if (stop) m.easeTo({center: [stop.lng, stop.lat], zoom: stopsZoom(m), offset: sheetOffset(m), duration: FOCUS_MS});
   });
 

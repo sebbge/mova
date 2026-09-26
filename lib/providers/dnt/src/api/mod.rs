@@ -1,17 +1,29 @@
 mod catalog;
 mod feed;
+mod index;
 mod kml;
+mod long_distance;
 mod online;
+mod places;
 mod roster;
+mod seguitubus;
+mod synthesis;
 
 use crate::core::provider::prelude::*;
 
 pub use feed::rebuild as rebuild_feed;
+pub use index::Index;
 pub use kml::{Shape, parse as parse_kml};
+pub use long_distance::{Trip, corridors, parse as parse_long_distance};
 pub use online::OnlineBus;
+pub use places::all as places;
 pub use roster::{lines_by_stop as fetch_roster, parse as parse_roster};
+pub use seguitubus::Service;
+pub use synthesis::gtfs as synthesize;
 
 use std::time::Duration;
+
+const LONG_DISTANCE: &str = "horarios_largadistancia";
 
 pub struct DntApi {
   http: reqwest::Client,
@@ -45,6 +57,24 @@ impl DntApi {
     })
     .await
     .map_err(|e| Error::External(format!("feed rebuild panicked: {e}")))?
+  }
+
+  pub async fn long_distance_version(&self) -> Result<String> {
+    let resource = catalog::resource(&self.http, catalog::SCHEDULES, LONG_DISTANCE).await?;
+    let published = resource.last_modified.clone().unwrap_or_else(|| resource.file_name().to_string());
+    Ok(format!("{published}+{:x}", places::fingerprint()))
+  }
+
+  pub async fn long_distance(&self) -> Result<Vec<Trip>> {
+    let resource = catalog::resource(&self.http, catalog::SCHEDULES, LONG_DISTANCE).await?;
+    let bytes = catalog::download(&self.http, &resource.url).await?;
+    tokio::task::spawn_blocking(move || long_distance::parse(&bytes))
+      .await
+      .map_err(|e| Error::External(format!("long-distance parse panicked: {e}")))?
+  }
+
+  pub async fn services(&self) -> Result<Vec<Service>> {
+    seguitubus::services(&self.http).await
   }
 
   pub async fn buses(&self) -> Result<Vec<OnlineBus>> {

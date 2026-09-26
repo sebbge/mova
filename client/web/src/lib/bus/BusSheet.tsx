@@ -1,6 +1,7 @@
 import {For, Show} from 'solid-js';
 import type {Bus, BusFreshness} from '~/lib/api/types';
 import LineBadge from '~/lib/line/LineBadge';
+import {delayLabel} from '~/lib/format';
 import {companyTint, freshnessVar} from '~/lib/ui/palette';
 import parts from '~/lib/ui/sheet/parts.module.css';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
@@ -15,7 +16,9 @@ const CONFIDENCE: Record<BusFreshness, string> = {
 export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
   const tint = () => companyTint(props.bus.company);
   const tags = () =>
-    [props.bus.access, props.bus.emissions, props.bus.thermal_comfort].filter((t): t is string => Boolean(t));
+    [delayLabel(props.bus.delay_min), props.bus.access, props.bus.emissions, props.bus.thermal_comfort].filter(
+      (t): t is string => Boolean(t)
+    );
 
   return (
     <>
@@ -53,15 +56,18 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
             <For each={tags()}>{(tag) => <li>{tag}</li>}</For>
           </ul>
         </Show>
+      </div>
 
-        <Show when={props.onShowLine}>
-          {(onShowLine) => (
+      {/* outside the scroll */}
+      <Show when={props.onShowLine}>
+        {(onShowLine) => (
+          <div class={styles.footer} style={{'--list': tint().list}}>
             <button class={styles.line} onClick={() => onShowLine()()}>
               Ver línea completa
             </button>
-          )}
-        </Show>
-      </div>
+          </div>
+        )}
+      </Show>
     </>
   );
 }

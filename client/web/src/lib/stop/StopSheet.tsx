@@ -1,22 +1,17 @@
 import {For, Match, Show, Switch} from 'solid-js';
-import type {Stop, StopArrival, StopLine} from '~/lib/api/types';
-import {orderedRefs, providerInfo, providerOf, serviceOf} from '~/lib/domain/providers';
-import {eta, rawId} from '~/lib/format';
+import type {Stop, StopLine} from '~/lib/api/types';
+import {orderedRefs, placeKicker, providerInfo, providerOf, serviceOf} from '~/lib/domain/providers';
+import {arrivalLabel, arrivalTitle, rawId} from '~/lib/format';
 import LineBadge from '~/lib/line/LineBadge';
 import MetaIcons from '~/lib/ui/icons/MetaIcons';
 import ServiceIcon from '~/lib/ui/icons/ServiceIcon';
 import StopIcon from '~/lib/ui/icons/StopIcon';
 import {freshnessVar} from '~/lib/ui/palette';
+import SourceCredit from '~/lib/ui/SourceCredit';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import SheetTabs from '~/lib/ui/sheet/SheetTabs';
 import ArrivalsSkeleton from './ArrivalsSkeleton';
 import styles from './StopSheet.module.css';
-
-function arrivalTitle(arrival: StopArrival | undefined): string {
-  if (arrival?.live) return 'Posición en vivo';
-  if (arrival?.zonal) return 'Horario zonal: la planilla lo publica en la esquina, no en esta parada';
-  return 'Horario de planilla';
-}
 
 export default function StopSheet(props: {
   stop: Stop | null;
@@ -28,7 +23,8 @@ export default function StopSheet(props: {
   onSelectService?: (ref: string) => void; // same shelter, already loaded
 }) {
   const ref = () => props.stop?.stop_id ?? props.stopRef;
-  const suburban = () => serviceOf(ref()) === 'suburban';
+  const service = () => serviceOf(ref());
+  const title = () => props.stop?.stop_name ?? props.stopName ?? 'Cargando…';
   const current = () => providerInfo(providerOf(ref()));
   const tabs = () =>
     orderedRefs(props.stop?.siblings ?? []).map((r) => {
@@ -38,20 +34,22 @@ export default function StopSheet(props: {
 
   return (
     <>
-      <div class={styles.band} classList={{[styles.suburban]: suburban()}}>
+      <div class={`${styles.band} ${styles[service()] ?? ''}`}>
         <SheetHeader
-          kicker={`Parada N° ${rawId(props.stop?.siblings?.[0] ?? ref())}`}
-          title={props.stop?.stop_name ?? props.stopName ?? 'Cargando…'}
+          kicker={placeKicker(ref(), title()) ?? `Parada N° ${rawId(props.stop?.siblings?.[0] ?? ref())}`}
+          title={title()}
           lead={<StopIcon />}
         />
 
         <Show
           when={tabs().length >= 2}
           fallback={
-            <p class={styles.only}>
-              <ServiceIcon letter={current().letter} />
-              {current().only}
-            </p>
+            <Show when={current().only}>
+              <p class={styles.only}>
+                <ServiceIcon letter={current().letter} />
+                {current().only}
+              </p>
+            </Show>
           }>
           <SheetTabs
             label='Tipo de servicio'
@@ -68,7 +66,7 @@ export default function StopSheet(props: {
         </Show>
       </div>
 
-      <div class={styles.list} classList={{[styles.suburban]: suburban()}}>
+      <div class={`${styles.list} ${styles[service()] ?? ''}`}>
         <Switch
           fallback={
             <ul class={`${styles.lines} sheet-scroll`}>
@@ -87,17 +85,17 @@ export default function StopSheet(props: {
                         <span class={styles.etas}>
                           <span
                             class={styles.eta}
-                            classList={{[styles.zonal]: Boolean(first()?.zonal)}}
+                            classList={{[styles.scheduleGuess]: Boolean(first()?.zonal || first()?.interpolated)}}
                             style={{color: freshnessVar(first()?.live ?? false, first()?.bus?.freshness)}}
                             title={arrivalTitle(first())}>
-                            {eta(first()?.eta)}
+                            {arrivalLabel(first())}
                           </span>
                           <Show when={line.arrivals.length > 1}>
                             <span class={styles.next}>
                               <For each={line.arrivals.slice(1, 3)}>
                                 {(arrival) => (
                                   <span style={{color: freshnessVar(arrival.live, arrival.bus?.freshness)}}>
-                                    {eta(arrival.eta)}
+                                    {arrivalLabel(arrival)}
                                   </span>
                                 )}
                               </For>
@@ -121,6 +119,7 @@ export default function StopSheet(props: {
             <p class={styles.note}>No hay llegadas previstas ahora.</p>
           </Match>
         </Switch>
+        <SourceCredit provider={providerOf(ref())} tinted />
       </div>
     </>
   );

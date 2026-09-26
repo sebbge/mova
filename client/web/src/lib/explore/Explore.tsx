@@ -20,19 +20,27 @@ export default function Explore() {
       <MapCanvas
         camera={MAP_CAMERA}
         shape={selection.line.shape}
+        routeCompany={selection.routeCompany}
         buses={selection.buses}
         selectedStopId={selection.stopId}
         selectedSiblings={selection.stops.refs}
+        selectedStop={selection.stops.stop}
         followBusId={selection.busId}
         onSelectStop={(id, name) => selection.openStop(id, name)}
         onSelectBus={(bus) => selection.openBus(bus)}
         onBackground={() => selection.deselectBus()}
+        onView={(center, km2) => selection.onView(center, km2)}
       />
 
       <Sheet open={selection.open} onBack={selection.back} onClose={() => selection.close()}>
         <Switch>
           <Match when={selection.selectedBus}>
-            {(bus) => <BusSheet bus={bus()} onShowLine={() => selection.showLine()} />}
+            {(bus) => (
+              <BusSheet
+                bus={bus()}
+                onShowLine={selection.lineId === bus().line ? () => selection.showLine() : undefined}
+              />
+            )}
           </Match>
           <Match when={selection.lineId}>
             {(line) => (

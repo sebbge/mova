@@ -2,6 +2,7 @@ use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Region {
+  Uy,
   UyAr,
   UyCa,
   UyCl,
@@ -26,6 +27,7 @@ pub enum Region {
 impl Region {
   pub const fn id(self) -> &'static str {
     match self {
+      Self::Uy => "uy",
       Self::UyAr => "uy-ar",
       Self::UyCa => "uy-ca",
       Self::UyCl => "uy-cl",
@@ -46,6 +48,10 @@ impl Region {
       Self::UyTa => "uy-ta",
       Self::UyTt => "uy-tt",
     }
+  }
+
+  pub const fn is_national(self) -> bool {
+    matches!(self, Self::Uy)
   }
 }
 

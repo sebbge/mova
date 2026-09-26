@@ -1,6 +1,8 @@
 import {createEffect, createSignal, onCleanup, type Accessor, type Setter} from 'solid-js';
 import type {Bus} from '~/lib/api/types';
-import {providerOf} from '~/lib/domain/providers';
+import {RegionBuses} from '~/lib/bus/RegionBuses';
+import {hasLines, providerOf} from '~/lib/domain/providers';
+import {regionsShowingAllBuses} from '~/lib/domain/regions';
 import {LineFeed} from '~/lib/line/LineFeed';
 import {StopFeed} from '~/lib/stop/StopFeed';
 import type {MapUrl} from './MapUrl';
@@ -12,6 +14,7 @@ const LINE_CLEARED = {[P.line]: null, [P.variant]: null, [P.direction]: null, [P
 export class MapSelection {
   readonly stops = new StopFeed();
   readonly line = new LineFeed();
+  readonly regionBuses = new RegionBuses();
 
   readonly #directionHint: Accessor<string | null>; // tapped arrival's destination
   readonly #setDirectionHint: Setter<string | null>;
@@ -23,6 +26,8 @@ export class MapSelection {
   readonly #setBusFromStop: Setter<boolean>;
   readonly #lineFromBus: Accessor<string | null>;
   readonly #setLineFromBus: Setter<string | null>;
+  readonly #liveRegions: Accessor<string>; // stable string
+  readonly #setLiveRegions: Setter<string>;
 
   constructor(private readonly url: MapUrl) {
     [this.#directionHint, this.#setDirectionHint] = createSignal<string | null>(null);
@@ -30,6 +35,9 @@ export class MapSelection {
     [this.#knownName, this.#setKnownName] = createSignal<string>();
     [this.#busFromStop, this.#setBusFromStop] = createSignal(false);
     [this.#lineFromBus, this.#setLineFromBus] = createSignal<string | null>(null);
+    [this.#liveRegions, this.#setLiveRegions] = createSignal('');
+
+    createEffect(() => onCleanup(this.regionBuses.follow(this.#liveRegions()) ?? (() => {})));
 
     createEffect(() => this.stops.follow(this.stopId));
     onCleanup(() => this.stops.close());
@@ -122,13 +130,33 @@ export class MapSelection {
   get selectedBus(): Bus | null {
     const id = this.busId;
     if (!id) return null;
-    return this.#lineBuses().find((b) => b.id === id) ?? this.stops.buses.find((b) => b.id === id) ?? null;
+    return (
+      this.#lineBuses().find((b) => b.id === id) ??
+      this.stops.buses.find((b) => b.id === id) ??
+      this.regionBuses.buses.find((b) => b.id === id) ??
+      null
+    );
   }
 
+  // selection first, region buses behind
   get buses(): Bus[] {
-    const buses = this.#lineBuses();
+    const own = this.#lineBuses();
     const selected = this.selectedBus;
-    return selected && !buses.some((b) => b.id === selected.id) ? [...buses, selected] : buses;
+    const focused = selected && !own.some((b) => b.id === selected.id) ? [...own, selected] : own;
+    const ids = new Set(focused.map((b) => b.id));
+    return [...focused, ...this.regionBuses.buses.filter((b) => !ids.has(b.id))];
+  }
+
+  get routeCompany(): string | undefined {
+    return this.selectedBus?.company ?? this.lineCompany;
+  }
+
+  onView(center: {lng: number; lat: number}, km2: number) {
+    this.#setLiveRegions(
+      regionsShowingAllBuses(center.lng, center.lat, km2)
+        .map((r) => r.id)
+        .join(',')
+    );
   }
 
   get open(): boolean {
@@ -158,17 +186,29 @@ export class MapSelection {
 
   // brings its line
   openBus(bus: Bus) {
+    const provider = this.regionBuses.providerOf(bus.id) ?? (this.stopId ? providerOf(this.stopId) : undefined);
+    if (provider && !hasLines(provider)) {
+      this.openBusOnly(bus);
+      return;
+    }
     const fromStop = this.lineId !== bus.line;
     this.#setBusFromStop(fromStop);
     if (!fromStop) {
       this.url.select({[P.bus]: bus.id});
       return;
     }
-    const shape = bus.shape_id && this.stopId ? `${providerOf(this.stopId)}-${bus.shape_id}` : null;
+    const shape = bus.shape_id && provider ? `${provider}-${bus.shape_id}` : null;
     this.#setDirectionHint(shape ? null : (bus.destination ?? null));
     this.#setLineCompany(bus.company);
     this.#setLineFromBus(null);
     this.url.select({...LINE_CLEARED, [P.line]: bus.line, [P.shape]: shape, [P.bus]: bus.id});
+  }
+
+  // provider without lines
+  openBusOnly(bus: Bus) {
+    this.#setBusFromStop(false);
+    this.#setLineFromBus(null);
+    this.url.select({[P.bus]: bus.id});
   }
 
   showLine() {
@@ -190,8 +230,9 @@ export class MapSelection {
 
   // live -> bus, scheduled -> line
   openArrival(line: string, destination?: string, company?: string) {
-    const bus = this.stops.arrivals.find((l) => l.line === line)?.arrivals.find((a) => a.live && a.bus)?.bus;
-    if (bus) this.openBus(bus);
+    const arrival = this.stops.arrivals.find((l) => l.line === line)?.arrivals.find((a) => a.live && a.bus);
+    if (arrival?.bus && arrival.stop_position) this.openBusOnly(arrival.bus);
+    else if (arrival?.bus) this.openBus(arrival.bus);
     else this.openLine(line, destination, company);
   }
 

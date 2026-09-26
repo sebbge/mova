@@ -18,4 +18,26 @@
   --company-coetc-header: color-mix(in srgb, var(--company-coetc) 24%, #0b0d10);
   --company-coetc-list: color-mix(in srgb, var(--company-coetc) 9%, #0b0d10);
   --company-coetc-outline: hsl(from var(--company-coetc) h calc(s * 0.85) calc(l + 18));
+
+  --company-codesa: #e02b2b;
+  --company-codesa-header: color-mix(in srgb, var(--company-codesa) 24%, #0b0d10);
+  --company-codesa-list: color-mix(in srgb, var(--company-codesa) 9%, #0b0d10);
+  --company-codesa-outline: hsl(from var(--company-codesa) h calc(s * 0.85) calc(l + 18));
+
+  --company-mdoturismo: #6ebd39;
+  --company-mdoturismo-header: color-mix(in srgb, var(--company-mdoturismo) 24%, #0b0d10);
+  --company-mdoturismo-list: color-mix(in srgb, var(--company-mdoturismo) 9%, #0b0d10);
+  --company-mdoturismo-outline: hsl(from var(--company-mdoturismo) h calc(s * 0.85) calc(l + 18));
+
+  --company-micro: #d89f67;
+  --company-micro-header: color-mix(in srgb, var(--company-micro) 24%, #0b0d10);
+  --company-micro-list: color-mix(in srgb, var(--company-micro) 9%, #0b0d10);
+  --company-micro-outline: hsl(from var(--company-micro) h calc(s * 0.85) calc(l + 18));
+
+  --company-solantigua: #c44225;
+  --company-solantigua-header: color-mix(in srgb, var(--company-solantigua) 24%, #0b0d10);
+  --company-solantigua-list: color-mix(in srgb, var(--company-solantigua) 9%, #0b0d10);
+  --company-solantigua-outline: hsl(from var(--company-solantigua) h calc(s * 0.85) calc(l + 18));
+
+  --company-unknown: #8a8f98;
 }

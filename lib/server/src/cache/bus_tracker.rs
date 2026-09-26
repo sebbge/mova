@@ -105,6 +105,8 @@ impl BusTracker {
         emissions: None,
         thermal_comfort: None,
         delay_min: None,
+        stop: None,
+        next_stop: None,
         stale_count: 0,
         last_seen_epoch: now,
       });

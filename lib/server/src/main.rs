@@ -1,3 +1,4 @@
+use citymob_busmatick as busmatick;
 use citymob_core as core;
 use citymob_dnt as dnt;
 use citymob_stm as stm;
@@ -58,18 +59,6 @@ impl Server {
     Ok(Scope::new(handle.clone()))
   }
 
-  pub fn region(&self) -> Result<String> {
-    let mut regions: Vec<_> = self.providers.iter().map(|p| p.authority).collect();
-    regions.sort_unstable();
-    regions.dedup();
-
-    match regions.as_slice() {
-      [only] => Ok(only.id().to_string()),
-      [] => Err(Error::NotFound("no providers loaded".into())),
-      _ => Err(Error::BadRequest("several regions loaded: specify one".into())),
-    }
-  }
-
   pub fn router(state: State) -> axum::Router<State> {
     use axum::routing::get;
 
@@ -91,6 +80,7 @@ impl Server {
     // realtime
     let realtime = axum::Router::new()
       .route("/health", get(handlers::health::health))
+      .route("/buses", get(handlers::bus::list))
       .route("/stop/arrivals/{provider}/{id}", get(handlers::stop::arrivals))
       .route("/line/buses/{provider}/{id}", get(handlers::line::buses));
 
@@ -155,7 +145,12 @@ impl State {
 
     let providers: Vec<Arc<Provider>> = vec![
       Arc::new(stm::provider(stm_config()).expect("stm: invalid config")),
-      Arc::new(dnt::provider().expect("dnt: invalid config")),
+      Arc::new(dnt::metropolitan().expect("dnt: invalid config")),
+      Arc::new(dnt::interdepartmental().expect("inter: invalid config")),
+      Arc::new(busmatick::codesa(busmatick_config("CODESA_URL")).expect("codesa: invalid config")),
+      Arc::new(busmatick::mdoturismo(busmatick_config("MDOTURISMO_URL")).expect("mdoturismo: invalid config")),
+      Arc::new(busmatick::micro(busmatick_config("MICRO_URL")).expect("micro: invalid config")),
+      Arc::new(busmatick::solantigua(busmatick_config("SOLANTIGUA_URL")).expect("solantigua: invalid config")),
     ];
 
     for provider in &providers {
@@ -181,6 +176,10 @@ fn stm_config() -> stm::StmConfig {
     client_id: var("IM_CLIENT_ID"),
     client_secret: var("IM_CLIENT_SECRET"),
   }
+}
+
+fn busmatick_config(key: &str) -> busmatick::BusmatickConfig {
+  busmatick::BusmatickConfig { base: std::env::var(key).unwrap_or_default() }
 }
 
 fn cors_layer() -> tower_http::cors::CorsLayer {

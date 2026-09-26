@@ -6,8 +6,10 @@ import type {RouteShape} from '~/lib/api/types';
 import type {Region} from '~/lib/domain/regions';
 import LineBadge from '~/lib/line/LineBadge';
 import Header from '~/lib/ui/Header';
+import {providerOf} from '~/lib/domain/providers';
 import {rawId} from '~/lib/format';
 import {href} from '~/lib/ui/href';
+import SourceCredit from '~/lib/ui/SourceCredit';
 import {linePaths} from '../../_paths';
 
 export const getStaticPaths = linePaths;
@@ -89,6 +91,8 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
         ))}
       </>
     )}
+
+    <SourceCredit provider={shapes[0] ? providerOf(shapes[0].route_id) : undefined} />
   </main>
 </Base>
 

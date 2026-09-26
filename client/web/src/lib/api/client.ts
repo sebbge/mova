@@ -1,5 +1,5 @@
 import {PUBLIC_API_URL} from 'astro:env/client';
-import type {Bus, BusRoute, RouteShape, Stop, StopDetail, StopItem, StopSchedule} from './types';
+import type {Bus, BusRoute, RegionBus, RouteShape, Stop, StopDetail, StopItem, StopSchedule} from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -92,4 +92,6 @@ export const api = {
 
   lineBuses: (provider: string, line: string, o?: Options) =>
     request<Bus[]>(`/line/buses/${provider}/${encodeURIComponent(line)}`, o),
+
+  regionBuses: (region: string, o?: Options) => request<RegionBus[]>(`/buses${query({region})}`, o),
 };

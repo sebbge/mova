@@ -69,6 +69,8 @@ impl From<OnlineBus> for BusEntry {
       emissions: None,
       thermal_comfort: None,
       delay_min: None,
+      stop: None,
+      next_stop: None,
     }
   }
 }

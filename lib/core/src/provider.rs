@@ -87,7 +87,7 @@ pub mod prelude {
   pub use super::{
     Arrivals, BusesByLine, Feed, Fleet, LineBuses, LinesByStop, Provider, Static, UpcomingByLine, Vehicles,
   };
-  pub use crate::bus::{BusEntry, UpcomingArrival};
+  pub use crate::bus::{BusEntry, StopRef, UpcomingArrival};
   pub use crate::geo::Point;
   pub use crate::region::Region;
   pub use crate::{Error, Result, format, http};

@@ -26,6 +26,8 @@ export interface Bus {
   thermal_comfort?: string;
   delay_min?: number;
   bearing_deg?: number;
+  stop?: StopRef;
+  next_stop?: StopRef;
   freshness: BusFreshness;
   still: boolean;
   past_stop: boolean;
@@ -34,8 +36,22 @@ export interface Bus {
   last_seen_epoch: number;
 }
 
+export interface RegionBus extends Bus {
+  provider: string;
+}
+
+export interface StopRef {
+  id: string;
+  name: string;
+}
+
+// another operator's bus, no eta
+export type StopPosition = 'at' | 'next';
+
 export interface StopArrival {
   zonal?: boolean; // zone marker
+  interpolated?: boolean; // estimated between two points
+  stop_position?: StopPosition;
   eta?: number;
   live: boolean;
   bus?: Bus;
@@ -50,6 +66,7 @@ export interface StopLine {
 
 export interface ScheduledLine {
   zonal?: boolean;
+  interpolated?: boolean;
   line: string;
   destination: string | null;
   departures: number[]; // s since today's midnight
@@ -93,6 +110,7 @@ export interface BusRoute {
   route_short_name: string;
   route_long_name?: string;
   agency_id?: string;
+  region: string;
   area?: string;
 }
 
@@ -113,10 +131,10 @@ export interface DirectionInfo {
 
 export interface RouteShape {
   route_id: string;
-  shape_id: string;
+  shape_id: string | null;
   direction_id: number;
   headsign?: string;
-  shape: LineString;
+  shape: LineString | null;
   stops: RouteStop[];
   available_directions: DirectionInfo[];
 }

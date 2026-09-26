@@ -4,8 +4,7 @@ use entities::line::{Route, RouteShape};
 
 ///# GET <BONDI>/routes
 pub async fn list(State(state): State<crate::State>) -> crate::Res<Vec<Route>> {
-  let region = state.region()?;
-  let routes = Route::load_list(&state, &region).await?;
+  let routes = Route::load_list(&state).await?;
 
   tracing::info!(count = routes.len(), "GET 200 /routes");
   Ok(Json(routes))
@@ -17,8 +16,7 @@ pub async fn search(State(state): State<crate::State>, Query(params): Query<Sear
     return Err(crate::Error::BadRequest("q must not be empty".into()));
   }
 
-  let region = state.region()?;
-  let routes = Route::load_search(&state, &region, &params.q).await?;
+  let routes = Route::load_search(&state, &params.q).await?;
   tracing::info!(term = params.q, "GET 200 /routes/search");
   Ok(Json(routes))
 }

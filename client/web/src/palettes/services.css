@@ -2,6 +2,7 @@
   --service-urban: #2d487f;
   --service-suburban: #2f7a63;
   --service-inter: #bc6b23;
+  --service-neutral: #566682;
 
   --service-urban-header: hsl(from var(--service-urban) h calc(s * 0.75) 19%);
   --service-urban-list: hsl(from var(--service-urban) h calc(s * 0.4) 10%);
@@ -14,6 +15,10 @@
   --service-inter-header: hsl(from var(--service-inter) h calc(s * 0.75) 19%);
   --service-inter-list: hsl(from var(--service-inter) h calc(s * 0.4) 10%);
   --service-inter-outline: hsl(from var(--service-inter) h calc(s * 0.85) 50%);
+
+  --service-neutral-header: hsl(from var(--service-neutral) h calc(s * 0.75) 19%);
+  --service-neutral-list: hsl(from var(--service-neutral) h calc(s * 0.4) 10%);
+  --service-neutral-outline: hsl(from var(--service-neutral) h calc(s * 0.85) 60%);
 
   --service-on: #ffffff;
   --service-on-muted: #a6aebd;

@@ -1,10 +1,12 @@
 import type {Service} from '~/lib/domain/providers';
+import {companySlug} from '~/lib/ui/palette';
 
 // css tokens as rgb()
 const PIN_FALLBACK: Record<Service, string> = {
   urban: '#2d487f',
   suburban: '#2f7a63',
   inter: '#bc6b23',
+  neutral: '#b4b9c1',
 };
 
 let probe: CanvasRenderingContext2D | null = null;
@@ -28,8 +30,9 @@ export function token(name: string, fallback: string): string {
   return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
 }
 
-export function brand(): string {
-  return token('--brand', '#2fb152');
+// gray without a company
+export function routeColor(company: string | undefined): string {
+  return token(`--company-${companySlug(company) ?? 'unknown'}`, '#8a8f98');
 }
 
 export function outline(): string {

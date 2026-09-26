@@ -33,10 +33,11 @@ impl LocalGtfs {
     gtfs: &Gtfs,
     new_version: &str,
     provider: &str,
-    region: &str,
+    authority: crate::core::region::Region,
     names: &dyn Feed,
     lines_by_stop: Option<&crate::core::provider::LinesByStop>,
   ) -> crate::Result<()> {
+    let region = authority.id();
     let mut tx = db.begin().await?;
     Self::clear_provider(&mut tx, provider).await?;
 
@@ -49,7 +50,9 @@ impl LocalGtfs {
     Self::insert_stop_times(&mut tx, gtfs, provider, region, &loaded).await?;
 
     Self::analyze(&mut tx).await?;
-    Self::resolve_route_areas(&mut tx, provider).await?;
+    if !authority.is_national() {
+      Self::resolve_route_areas(&mut tx, provider).await?;
+    }
 
     if let Some(lines_by_stop) = lines_by_stop {
       Self::insert_stop_lines(&mut tx, lines_by_stop, provider, region).await?;
@@ -121,7 +124,8 @@ impl LocalGtfs {
     UPDATE stops s SET zonal = TRUE
     WHERE s.region = $2 AND s.provider = $1
       AND EXISTS (SELECT 1 FROM stop_times t
-                  WHERE t.region = s.region AND t.provider = s.provider AND t.stop_id = s.stop_id)
+                  WHERE t.region = s.region AND t.provider = s.provider AND t.stop_id = s.stop_id
+                    AND NOT t.interpolated)
       AND NOT EXISTS (SELECT 1 FROM stop_lines l
                       WHERE l.region = s.region AND l.provider = s.provider AND l.stop_id = s.stop_id)
     "#;
@@ -386,7 +390,7 @@ impl LocalGtfs {
 
     const CHUNK: usize = 5_000;
     let trips_vec: Vec<(&String, &gtfs_structures::Trip)> = gtfs.trips.iter().collect();
-    let (mut orphans, mut unshaped) = (0usize, 0usize);
+    let (mut orphans, mut unshaped, mut unusable) = (0usize, 0usize, 0usize);
 
     for chunk in trips_vec.chunks(CHUNK) {
       let mut trip_ids: Vec<String> = Vec::with_capacity(chunk.len());
@@ -410,6 +414,11 @@ impl LocalGtfs {
 
         if !loaded.routes.contains(trip.route_id.as_str()) || !loaded.services.contains(trip.service_id.as_str()) {
           orphans += 1;
+          continue;
+        }
+        // never a representative with under two stops
+        if trip.stop_times.len() < 2 {
+          unusable += 1;
           continue;
         }
         let shape_id = trip.shape_id.clone().filter(|id| !id.is_empty());
@@ -463,6 +472,9 @@ impl LocalGtfs {
     if orphans > 0 || unshaped > 0 {
       tracing::warn!(orphans, unshaped, "[gtfs] trips referencing unloaded routes, services or shapes");
     }
+    if unusable > 0 {
+      tracing::warn!(unusable, "[gtfs] trips with fewer than two stop times left out");
+    }
     Ok(())
   }
 
@@ -477,12 +489,15 @@ impl LocalGtfs {
 
     const CHUNK: usize = 5_000;
 
-    let all_stop_times: Vec<(&str, &gtfs_structures::StopTime)> = gtfs
+    let all_stop_times: Vec<(&str, &gtfs_structures::StopTime, Option<super::times::Timing>)> = gtfs
       .trips
       .iter()
-      .flat_map(|(trip_id, trip)| trip.stop_times.iter().map(move |st| (trip_id.as_str(), st)))
+      .flat_map(|(trip_id, trip)| {
+        let timings = super::times::fill(&trip.stop_times);
+        trip.stop_times.iter().zip(timings).map(move |(st, timing)| (trip_id.as_str(), st, timing))
+      })
       .collect();
-    let mut orphans = 0usize;
+    let (mut orphans, mut interpolated) = (0usize, 0usize);
 
     for chunk in all_stop_times.chunks(CHUNK) {
       let mut trip_ids: Vec<String> = Vec::with_capacity(chunk.len());
@@ -490,31 +505,32 @@ impl LocalGtfs {
       let mut sequences: Vec<i32> = Vec::with_capacity(chunk.len());
       let mut arrivals: Vec<Option<i32>> = Vec::with_capacity(chunk.len());
       let mut departures: Vec<Option<i32>> = Vec::with_capacity(chunk.len());
+      let mut estimated: Vec<bool> = Vec::with_capacity(chunk.len());
 
-      for (trip_id, st) in chunk {
+      for (trip_id, st, timing) in chunk {
         if !loaded.trips.contains(trip_id) || !loaded.stops.contains(st.stop.id.as_str()) {
           orphans += 1;
           continue;
         }
-        if st.arrival_time.is_none() && st.departure_time.is_none() {
-          // tracing::warn!(trip_id = %trip_id, stop_id = %st.stop.id, sequence = st.stop_sequence, "[gtfs] stop time has no arrival or departure, skipping");
-          continue;
-        }
+        let Some(timing) = timing else { continue };
+        interpolated += usize::from(timing.interpolated);
 
         trip_ids.push(trip_id.to_string());
         stop_ids.push(st.stop.id.clone());
         sequences.push(st.stop_sequence as i32);
-        arrivals.push(st.arrival_time.map(|t| t as i32));
-        departures.push(st.departure_time.map(|t| t as i32));
+        arrivals.push(timing.arrival.map(|t| t as i32));
+        departures.push(timing.departure.map(|t| t as i32));
+        estimated.push(timing.interpolated);
       }
 
       let q = r#"
-        INSERT INTO stop_times(region, provider, trip_id, stop_id, stop_sequence, arrival_time, departure_time)
+        INSERT INTO stop_times(region, provider, trip_id, stop_id, stop_sequence, arrival_time, departure_time, interpolated)
         SELECT $6, $7, t.trip_id, t.stop_id, t.stop_sequence,
           CASE WHEN t.arr IS NOT NULL THEN make_interval(secs => t.arr::float8) END,
-          CASE WHEN t.dep IS NOT NULL THEN make_interval(secs => t.dep::float8) END
-        FROM UNNEST($1::text[], $2::text[], $3::int4[], $4::int4[], $5::int4[])
-          AS t(trip_id, stop_id, stop_sequence, arr, dep)
+          CASE WHEN t.dep IS NOT NULL THEN make_interval(secs => t.dep::float8) END,
+          t.interpolated
+        FROM UNNEST($1::text[], $2::text[], $3::int4[], $4::int4[], $5::int4[], $8::bool[])
+          AS t(trip_id, stop_id, stop_sequence, arr, dep, interpolated)
         ON CONFLICT (region, provider, trip_id, stop_sequence) DO NOTHING
         "#;
       sqlx::query(q)
@@ -525,12 +541,16 @@ impl LocalGtfs {
         .bind(&departures)
         .bind(region)
         .bind(provider)
+        .bind(&estimated)
         .execute(tx.as_mut())
         .await?;
     }
 
     if orphans > 0 {
       tracing::warn!(orphans, "[gtfs] stop times referencing unloaded trips or stops");
+    }
+    if interpolated > 0 {
+      tracing::info!(interpolated, "[gtfs] stop times without a time interpolated between timepoints");
     }
     Ok(())
   }

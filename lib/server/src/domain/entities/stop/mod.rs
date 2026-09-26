@@ -28,6 +28,8 @@ pub struct ScheduledLine {
   pub departures: Vec<i64>,
   /// Schedule from a zone marker
   pub zonal: bool,
+  /// Interpolated between control points, only if all departures are
+  pub interpolated: bool,
 }
 
 ///# GET <BONDI>/stops/{stop_id}
@@ -80,6 +82,17 @@ pub struct StopArrival {
   pub bus: Option<Bus>,
   /// Zone marker schedules only
   pub zonal: bool,
+  /// Scheduled only: interpolated time
+  pub interpolated: bool,
+  /// Another provider's bus placed here by its operator, no ETA
+  pub stop_position: Option<StopPosition>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StopPosition {
+  At,
+  Next,
 }
 
 //TODO: remove
@@ -163,7 +176,7 @@ impl StopArrival {
     let eta = eta.filter(|&min| min <= 90);
     let mut snap = bus.clone();
     snap.past_stop = false;
-    Self { eta, live: eta.is_some(), bus: Some(snap), zonal: false }
+    Self { eta, live: eta.is_some(), bus: Some(snap), zonal: false, interpolated: false, stop_position: None }
   }
 
   pub fn from_upcoming(u: &UpcomingArrival) -> Self {
@@ -171,6 +184,8 @@ impl StopArrival {
       eta: crate::helpers::seconds_to_mins(u.eta_s),
       live: true,
       zonal: false,
+      interpolated: false,
+      stop_position: None,
       bus: Some(Bus {
         id: u.bus.id.clone(),
         unit: u.bus.unit.clone(),
@@ -191,6 +206,8 @@ impl StopArrival {
         emissions: u.bus.emissions.clone(),
         thermal_comfort: u.bus.thermal_comfort.clone(),
         delay_min: u.bus.delay_min,
+        stop: None,
+        next_stop: None,
         stale_count: 0,
         last_seen_epoch: chrono::Utc::now().timestamp(),
       }),
@@ -472,13 +489,76 @@ impl StopLine {
       snap.past_stop = true;
 
       let stop_line = lines.entry(row.line.clone()).or_insert_with(|| Self::empty(row.line.clone()));
-      stop_line.arrivals.push(StopArrival { eta: None, live: false, bus: Some(snap), zonal: false });
+      stop_line.arrivals.push(StopArrival {
+        eta: None,
+        live: false,
+        bus: Some(snap),
+        zonal: false,
+        interpolated: false,
+        stop_position: None,
+      });
     }
   }
 }
 
 use super::bus::Lines;
+use crate::core::provider::Vehicles;
 use crate::domain::scope::Scope;
+
+impl StopLine {
+  /// Same-authority buses placed here by their operator, name checked against code
+  async fn attach_relayed(state: &crate::State, scope: &Scope, stop_id: &str, lines: &mut StopLines) {
+    use crate::cache::BusTracking;
+
+    let others: Vec<Scope> = state
+      .scopes()
+      .filter(|s| s.region == scope.region && s.provider != scope.provider)
+      .filter(|s| matches!(s.vehicles(), Some(Vehicles::Fleet(_))))
+      .collect();
+    if others.is_empty() {
+      return;
+    }
+    let name = match Stop::name(&state.db, scope, stop_id).await {
+      Ok(Some(name)) => match_key(&name),
+      Ok(None) => return,
+      Err(e) => {
+        tracing::warn!(error = ?e, "[stops] relay skipped");
+        return;
+      }
+    };
+
+    let tracker = state.cache.tracker();
+    let is_here = |stop: &Option<crate::core::bus::StopRef>| {
+      stop.as_ref().is_some_and(|p| p.id == stop_id && match_key(&p.name) == name)
+    };
+    for other in others {
+      tracker.touch(&other.provider);
+      let Some(view) = tracker.view(&other.provider, Line::FLEET_STALE).await else {
+        continue;
+      };
+      for bus in view.by_line.values().flatten() {
+        let position = match (is_here(&bus.stop), is_here(&bus.next_stop)) {
+          (true, _) => StopPosition::At,
+          (_, true) => StopPosition::Next,
+          _ => continue,
+        };
+        let arrival = StopArrival {
+          eta: None,
+          live: true,
+          bus: Some(bus.clone()),
+          zonal: false,
+          interpolated: false,
+          stop_position: Some(position),
+        };
+        lines.entry(bus.line.clone()).or_insert_with(|| Self::empty(bus.line.clone())).arrivals.push(arrival);
+      }
+    }
+  }
+}
+
+fn match_key(raw: &str) -> String {
+  raw.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_uppercase()).collect()
+}
 impl StopDetail {
   pub async fn assemble(state: &crate::State, scope: &Scope, stop_id: &str) -> crate::Result<Self> {
     // gtfs departures
@@ -509,6 +589,7 @@ impl StopDetail {
     let mut lines = StopLine::fuse(state, scope, stop_id, static_lines, upcoming, &positions).await;
     StopLine::apply_ghosts(state, scope, stop_id, &mut lines, &positions).await;
     StopLine::attach_past_stop_buses(state, scope, stop_id, &mut lines, &positions).await;
+    StopLine::attach_relayed(state, scope, stop_id, &mut lines).await;
     Self::from_lines(lines)
   }
 

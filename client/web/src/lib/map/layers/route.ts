@@ -2,7 +2,7 @@ import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import type {RouteShape} from '~/lib/api/types';
 import {CHEVRON_PIXEL_RATIO, chevronImage} from '~/lib/map/images/chevron';
-import {brand} from '~/lib/map/paint';
+import {routeColor} from '~/lib/map/paint';
 
 const SOURCE = 'route';
 const CHEVRON = 'route-chevron';
@@ -14,14 +14,14 @@ export const routeLayer = {
     map.addSource(SOURCE, {type: 'geojson', data: features(null)});
   },
 
-  addLayers(map: MapLibreMap) {
+  addLayers(map: MapLibreMap, company: string | undefined) {
     map.addLayer({
       id: 'route-line',
       type: 'line',
       source: SOURCE,
       layout: {'line-cap': 'round', 'line-join': 'round'},
       paint: {
-        'line-color': brand(),
+        'line-color': routeColor(company),
         'line-width': ['interpolate', ['linear'], ['zoom'], 11, 6, 14, 11, 17, 18],
       },
     });
@@ -41,6 +41,10 @@ export const routeLayer = {
     });
   },
 
+  paint(map: MapLibreMap, company: string | undefined) {
+    if (map.getLayer('route-line')) map.setPaintProperty('route-line', 'line-color', routeColor(company));
+  },
+
   set(map: MapLibreMap, shape: RouteShape | null) {
     (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(features(shape));
   },
@@ -49,6 +53,6 @@ export const routeLayer = {
 function features(shape: RouteShape | null): FeatureCollection {
   return {
     type: 'FeatureCollection',
-    features: shape ? [{type: 'Feature', geometry: shape.shape, properties: {}}] : [],
+    features: shape?.shape ? [{type: 'Feature', geometry: shape.shape, properties: {}}] : [],
   };
 }

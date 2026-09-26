@@ -8,6 +8,13 @@ use crate::helpers::Encoding;
 
 use std::collections::HashMap;
 
+impl Stop {
+  pub async fn name(db: &crate::Db, scope: &Scope, stop_id: &str) -> crate::Result<Option<String>> {
+    let q = "SELECT stop_name FROM stops WHERE region = $1 AND provider = $2 AND stop_id = $3";
+    Ok(sqlx::query_scalar(q).bind(&scope.region).bind(&scope.provider).bind(stop_id).fetch_optional(db).await?)
+  }
+}
+
 impl StopLine {
   pub async fn get(db: &crate::Db, scope: &Scope, stop_id: &str) -> crate::Result<StopLines> {
     use chrono::{Local, Timelike};
@@ -23,22 +30,28 @@ impl StopLine {
       secs: Option<i64>,
       rn: i64,
       zonal: bool,
+      interpolated: bool,
     }
 
     let q = r#"
-    WITH all_departures AS (
+    WITH here AS MATERIALIZED (
+      SELECT st.* FROM stop_times st
+      WHERE st.region = $3 AND st.provider = $4 AND st.stop_id = $2
+        AND EXISTS (SELECT 1 FROM stop_times nx WHERE nx.region = st.region AND nx.provider = st.provider
+                    AND nx.trip_id = st.trip_id AND nx.stop_sequence > st.stop_sequence)
+    ),
+    all_departures AS (
         -- Today's normal trips (departure_time up to 24:00:00)
         SELECT
             r.route_short_name                                             AS line,
             t.trip_headsign                                                AS destination,
             EXTRACT(EPOCH FROM (st.departure_time - $1::interval))::bigint AS secs,
-            st.zonal
-        FROM stop_times  st
+            st.zonal, st.interpolated
+        FROM here        st
         JOIN trips       t  ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
         JOIN routes      r  ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
         JOIN calendar    c  ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
-        WHERE st.region = $3 AND st.provider = $4 AND st.stop_id = $2
-          AND st.departure_time > $1::interval
+        WHERE st.departure_time > $1::interval
           AND st.departure_time <= INTERVAL '1 day'
           AND c.start_date <= $5::date
           AND c.end_date   >= $5::date
@@ -56,13 +69,12 @@ impl StopLine {
             r.route_short_name                                                             AS line,
             t.trip_headsign                                                                AS destination,
             EXTRACT(EPOCH FROM (st.departure_time - INTERVAL '1 day' - $1::interval))::bigint AS secs,
-            st.zonal
-        FROM stop_times  st
+            st.zonal, st.interpolated
+        FROM here        st
         JOIN trips       t  ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
         JOIN routes      r  ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
         JOIN calendar    c  ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
-        WHERE st.region = $3 AND st.provider = $4 AND st.stop_id = $2
-          AND st.departure_time > INTERVAL '1 day'
+        WHERE st.departure_time > INTERVAL '1 day'
           AND st.departure_time - INTERVAL '1 day' > $1::interval
           AND c.start_date <= $5::date - 1
           AND c.end_date   >= $5::date - 1
@@ -75,14 +87,14 @@ impl StopLine {
     ),
     ranked AS (
         SELECT
-            line, destination, secs, zonal,
+            line, destination, secs, zonal, interpolated,
             ROW_NUMBER() OVER (
                 PARTITION BY line
                 ORDER BY secs
             ) AS rn
         FROM all_departures
     )
-    SELECT line, destination, secs, rn, zonal
+    SELECT line, destination, secs, rn, zonal, interpolated
     FROM ranked
     WHERE rn <= 3
     ORDER BY line, rn
@@ -105,7 +117,14 @@ impl StopLine {
         company: String::new(),
         arrivals: vec![],
       });
-      entry.arrivals.push(StopArrival { eta, live: false, bus: None, zonal: row.zonal });
+      entry.arrivals.push(StopArrival {
+        eta,
+        live: false,
+        bus: None,
+        zonal: row.zonal,
+        interpolated: row.interpolated,
+        stop_position: None,
+      });
     }
 
     // roster-only lines, no arrivals
@@ -143,19 +162,25 @@ impl StopSchedule {
       destination: Option<String>,
       secs: i64,
       zonal: bool,
+      interpolated: bool,
     }
 
     // yesterday past 24 h
     let q = r#"
+    WITH here AS MATERIALIZED (
+      SELECT st.* FROM stop_times st
+      WHERE st.region = $2 AND st.provider = $3 AND st.stop_id = $1
+        AND EXISTS (SELECT 1 FROM stop_times nx WHERE nx.region = st.region AND nx.provider = st.provider
+                    AND nx.trip_id = st.trip_id AND nx.stop_sequence > st.stop_sequence)
+    )
     SELECT r.route_short_name AS line,
            t.trip_headsign     AS destination,
-           EXTRACT(EPOCH FROM st.departure_time)::bigint AS secs, st.zonal
-    FROM stop_times st
+           EXTRACT(EPOCH FROM st.departure_time)::bigint AS secs, st.zonal, st.interpolated
+    FROM here st
     JOIN trips    t ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
     JOIN routes   r ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
     JOIN calendar c ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
-    WHERE st.region = $2 AND st.provider = $3 AND st.stop_id = $1
-      AND st.departure_time <= INTERVAL '1 day'
+    WHERE st.departure_time <= INTERVAL '1 day'
       AND c.start_date <= $4::date
       AND c.end_date   >= $4::date
       AND CASE EXTRACT(DOW FROM $4::date)::int
@@ -169,13 +194,12 @@ impl StopSchedule {
 
     SELECT r.route_short_name AS line,
            t.trip_headsign     AS destination,
-           EXTRACT(EPOCH FROM st.departure_time - INTERVAL '1 day')::bigint AS secs, st.zonal
-    FROM stop_times st
+           EXTRACT(EPOCH FROM st.departure_time - INTERVAL '1 day')::bigint AS secs, st.zonal, st.interpolated
+    FROM here st
     JOIN trips    t ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
     JOIN routes   r ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
     JOIN calendar c ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
-    WHERE st.region = $2 AND st.provider = $3 AND st.stop_id = $1
-      AND st.departure_time > INTERVAL '1 day'
+    WHERE st.departure_time > INTERVAL '1 day'
       AND c.start_date <= $4::date - 1
       AND c.end_date   >= $4::date - 1
       AND CASE EXTRACT(DOW FROM $4::date - 1)::int
@@ -194,12 +218,13 @@ impl StopSchedule {
       .fetch_all(db)
       .await?;
 
-    /// Departures from a zone marker
+    /// Departures attributed by us
     #[derive(Default)]
     struct Acc {
       departures: Vec<i64>,
       destinations: HashMap<String, usize>,
       zonal_count: usize,
+      interpolated_count: usize,
     }
 
     let mut by_line: HashMap<String, Acc> = HashMap::new();
@@ -212,6 +237,9 @@ impl StopSchedule {
       if row.zonal {
         entry.zonal_count += 1;
       }
+      if row.interpolated {
+        entry.interpolated_count += 1;
+      }
     }
 
     let mut lines: Vec<ScheduledLine> = by_line
@@ -220,7 +248,8 @@ impl StopSchedule {
         acc.departures.sort_unstable();
         let destination = acc.destinations.into_iter().max_by_key(|(_, n)| *n).map(|(d, _)| d);
         let zonal = acc.zonal_count == acc.departures.len();
-        ScheduledLine { line, destination, departures: acc.departures, zonal }
+        let interpolated = acc.interpolated_count == acc.departures.len();
+        ScheduledLine { line, destination, departures: acc.departures, zonal, interpolated }
       })
       .collect();
 
@@ -262,12 +291,17 @@ impl Stop {
     // natural line order, destinations by frequency
     // roster lines, no destination
     let q = r#"
-    WITH scheduled AS (
+    WITH here AS MATERIALIZED (
+      SELECT st.* FROM stop_times st
+      WHERE st.region = $2 AND st.provider = $3 AND st.stop_id = $1
+        AND EXISTS (SELECT 1 FROM stop_times nx WHERE nx.region = st.region AND nx.provider = st.provider
+                    AND nx.trip_id = st.trip_id AND nx.stop_sequence > st.stop_sequence)
+    ),
+    scheduled AS (
       SELECT r.route_short_name AS line, t.trip_headsign AS destination, COUNT(*) AS n
-      FROM stop_times st
+      FROM here st
       JOIN trips  t ON t.region = st.region AND t.provider = st.provider AND t.trip_id  = st.trip_id
       JOIN routes r ON r.region = t.region  AND r.provider = t.provider AND r.route_id = t.route_id
-      WHERE st.region = $2 AND st.provider = $3 AND st.stop_id = $1
       GROUP BY r.route_short_name, t.trip_headsign
     ),
     roster_only AS (
@@ -381,11 +415,16 @@ impl Stop {
        AND b.provider <> a.provider
        AND NOT b.zonal
        AND ST_DWithin(a.geom, b.geom, $2)
-       -- perpendicular to the heading is the opposite sidewalk
-       -- angle ignored under 10 m
-       AND (ST_Distance(a.geom, b.geom) <= 10 OR a.bearing_rad IS NULL
-            OR degrees(abs(atan2(sin(ST_Azimuth(a.geom, b.geom) - a.bearing_rad),
-                                 cos(ST_Azimuth(a.geom, b.geom) - a.bearing_rad)))) NOT BETWEEN 60 AND 120)
+      JOIN prio pa ON pa.provider = a.provider
+      JOIN prio pb ON pb.provider = b.provider
+      -- perpendicular to the leader's heading is the opposite sidewalk
+      -- angle ignored under 10 m
+      CROSS JOIN LATERAL (
+        SELECT CASE WHEN pa.rank < pb.rank THEN a.bearing_rad ELSE b.bearing_rad END AS heading,
+               CASE WHEN pa.rank < pb.rank THEN ST_Azimuth(a.geom, b.geom) ELSE ST_Azimuth(b.geom, a.geom) END AS hacia
+      ) m
+      WHERE ST_Distance(a.geom, b.geom) <= 10 OR m.heading IS NULL
+         OR degrees(abs(atan2(sin(m.hacia - m.heading), cos(m.hacia - m.heading)))) NOT BETWEEN 60 AND 120
       ORDER BY a.region, a.provider, a.stop_id, ST_Distance(a.geom, b.geom), b.provider, b.stop_id
     ),
     mutual AS (
@@ -440,6 +479,14 @@ impl Stop {
               cos(ST_Azimuth(ST_ClosestPoint(sh.geom, c.geom::geometry), c.geom::geometry) - tg.heading)
             )) BETWEEN 0 AND 180
       ORDER BY p.region, p.provider, p.zid, p.shape_id, ST_Distance(c.geom, z.geom)
+    ),
+    crossed AS (
+      DELETE FROM stop_times o
+      USING chosen e, trips t
+      WHERE o.region = e.region AND o.provider = e.provider AND o.stop_id = e.cid AND o.interpolated
+        AND t.region = o.region AND t.provider = o.provider AND t.trip_id = o.trip_id AND t.shape_id = e.shape_id
+        AND EXISTS (SELECT 1 FROM stop_times m WHERE m.region = o.region AND m.provider = o.provider
+                    AND m.trip_id = o.trip_id AND m.stop_id = e.zid)
     )
     UPDATE stop_times st SET stop_id = e.cid, zonal = TRUE
     FROM chosen e, trips t
@@ -467,6 +514,13 @@ impl Stop {
       JOIN stops c ON c.region = u.region AND c.provider = u.provider
                   AND NOT c.zonal AND ST_DWithin(c.geom, z.geom, $1)
       ORDER BY u.region, u.provider, u.stop_id, ST_Distance(c.geom, z.geom)
+    ),
+    crossed AS (
+      DELETE FROM stop_times o
+      USING chosen e
+      WHERE o.region = e.region AND o.provider = e.provider AND o.stop_id = e.cid AND o.interpolated
+        AND EXISTS (SELECT 1 FROM stop_times m WHERE m.region = o.region AND m.provider = o.provider
+                    AND m.trip_id = o.trip_id AND m.stop_id = e.zid)
     )
     UPDATE stop_times st SET stop_id = e.cid, zonal = TRUE
     FROM chosen e

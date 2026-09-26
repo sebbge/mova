@@ -9,6 +9,7 @@ rust-version = "1.88"
 publish = false
 
 [workspace.dependencies]
+citymob-busmatick = { path = "lib/providers/busmatick" }
 citymob-core = { path = "lib/core" }
 citymob-dnt = { path = "lib/providers/dnt" }
 citymob-stm = { path = "lib/providers/stm" }

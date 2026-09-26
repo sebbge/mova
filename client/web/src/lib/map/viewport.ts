@@ -1,6 +1,6 @@
 import type {LngLatBounds, Map as MapLibreMap} from 'maplibre-gl';
 
-export const STOPS_MAX_KM2 = 300;
+export const STOPS_MAX_KM2 = 400;
 
 const WIDE = 768; // px, sheet stops covering the map
 

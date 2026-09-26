@@ -16,7 +16,12 @@ export function scheduleToLines(schedule: StopSchedule, now = new Date()): StopL
       line: line.line,
       destination: line.destination ?? undefined,
       company: '',
-      arrivals: nextDepartures(line, elapsed).map((eta) => ({eta, live: false, zonal: line.zonal})),
+      arrivals: nextDepartures(line, elapsed).map((eta) => ({
+        eta,
+        live: false,
+        zonal: line.zonal,
+        interpolated: line.interpolated,
+      })),
     }))
     .filter((line) => line.arrivals.length > 0)
     .sort((a, b) => (a.arrivals[0].eta ?? 0) - (b.arrivals[0].eta ?? 0));

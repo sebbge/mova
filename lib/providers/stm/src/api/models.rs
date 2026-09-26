@@ -53,6 +53,8 @@ impl From<StmBus> for BusEntry {
       emissions: bus.emissions,
       thermal_comfort: bus.thermal_confort,
       delay_min: None,
+      stop: None,
+      next_stop: None,
     }
   }
 }

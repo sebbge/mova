@@ -1,6 +1,7 @@
 // https://api.montevideo.gub.uy/apidocs/publictransport#/gtfs
 // https://gtfs.org/
 mod model;
+mod times;
 use model::LocalGtfs;
 
 #[derive(Debug, PartialEq)]
@@ -18,7 +19,6 @@ async fn check_and_sync(state: &crate::State, handle: &crate::core::provider::Pr
     tracing::info!(provider, "[gtfs] provider has no feed");
     return Ok(SyncStatus::UpToDate);
   };
-  let region = handle.authority.id();
 
   let new_version = feed.version().await?;
   let current_version = LocalGtfs::version(&state.tasks_db, provider).await?;
@@ -36,8 +36,16 @@ async fn check_and_sync(state: &crate::State, handle: &crate::core::provider::Pr
     .map_err(|e| crate::Error::External(format!("GTFS parse failed: {e}")))?;
 
   // this provider only
-  LocalGtfs::replace_transaction(&state.tasks_db, &gtfs, &new_version, provider, region, feed, lines_by_stop.as_ref())
-    .await?;
+  LocalGtfs::replace_transaction(
+    &state.tasks_db,
+    &gtfs,
+    &new_version,
+    provider,
+    handle.authority,
+    feed,
+    lines_by_stop.as_ref(),
+  )
+  .await?;
 
   {
     // stop bearings, outside the transaction
@@ -58,7 +66,7 @@ async fn check_and_sync(state: &crate::State, handle: &crate::core::provider::Pr
     ) sub WHERE s.region = $1 AND s.provider = $2 AND s.stop_id = sub.stop_id
     "#,
     )
-    .bind(region)
+    .bind(handle.authority.id())
     .bind(provider)
     .execute(&state.tasks_db)
     .await

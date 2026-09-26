@@ -1,9 +1,11 @@
 import {For, Show} from 'solid-js';
 import type {BusRoute, RouteShape} from '~/lib/api/types';
+import {providerOf} from '~/lib/domain/providers';
 import {companyTint} from '~/lib/ui/palette';
 import parts from '~/lib/ui/sheet/parts.module.css';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import SheetTabs from '~/lib/ui/sheet/SheetTabs';
+import SourceCredit from '~/lib/ui/SourceCredit';
 import LineBadge from './LineBadge';
 import styles from './LineSheet.module.css';
 import RouteSkeleton from './RouteSkeleton';
@@ -110,6 +112,8 @@ export default function LineSheet(props: {
             )}
           </Show>
         </section>
+
+        <SourceCredit provider={props.routeId ? providerOf(props.routeId) : undefined} tinted />
       </div>
     </>
   );

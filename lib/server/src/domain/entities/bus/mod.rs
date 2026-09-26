@@ -28,6 +28,9 @@ pub struct Bus {
   pub emissions: Option<String>,
   pub thermal_comfort: Option<String>,
   pub delay_min: Option<i64>,
+  /// Operator's current and next stop
+  pub stop: Option<StopRef>,
+  pub next_stop: Option<StopRef>,
   //
   pub bearing_deg: Option<f64>,
   pub freshness: BusFreshness,
@@ -62,7 +65,11 @@ impl BusFreshness {
 }
 
 //# Line def
-use crate::core::{bus::BusEntry, geo::Point, provider::Vehicles};
+use crate::core::{
+  bus::{BusEntry, StopRef},
+  geo::Point,
+  provider::Vehicles,
+};
 
 use std::time::Duration;
 
@@ -125,6 +132,8 @@ impl Bus {
       emissions: obs.emissions,
       thermal_comfort: obs.thermal_comfort,
       delay_min: obs.delay_min,
+      stop: obs.stop,
+      next_stop: obs.next_stop,
       //
       bearing_deg,
       freshness: BusFreshness::Live,
@@ -134,6 +143,15 @@ impl Bus {
       last_seen_epoch: chrono::Utc::now().timestamp(),
     }
   }
+}
+
+//# Region
+/// Bus with its provider
+#[derive(Debug, Serialize)]
+pub struct RegionBus {
+  pub provider: String,
+  #[serde(flatten)]
+  pub bus: Bus,
 }
 
 //# Line impl
@@ -186,6 +204,38 @@ impl Line {
     }
 
     Ok(lines)
+  }
+
+  /// Fleet buses of an authority, for small regions
+  pub async fn region(state: &crate::State, region: &str) -> crate::Result<Vec<RegionBus>> {
+    let scopes: Vec<Scope> = state.scopes().filter(|s| s.region == region).collect();
+    if scopes.is_empty() {
+      return Err(crate::Error::NotFound(format!("unknown region: {region}")));
+    }
+
+    let mut views = tokio::task::JoinSet::new();
+    for scope in scopes.into_iter().filter(|s| matches!(s.vehicles(), Some(Vehicles::Fleet(_)))) {
+      let state = state.clone();
+      views.spawn(async move {
+        use crate::cache::BusTracking;
+        let tracker = state.cache.tracker();
+        tracker.touch(&scope.provider);
+        let view = tracker.wait_view(&scope.provider, Self::FLEET_STALE, Self::FLEET_WAIT).await;
+        (scope.provider, view)
+      });
+    }
+
+    let mut buses = Vec::new();
+    while let Some(joined) = views.join_next().await {
+      match joined {
+        Ok((provider, Some(view))) => buses.extend(
+          view.by_line.values().flatten().map(|bus| RegionBus { provider: provider.clone(), bus: bus.clone() }),
+        ),
+        Ok((provider, None)) => tracing::warn!(provider, "[fleet] no view in time, left out of region"),
+        Err(e) => tracing::warn!(error = ?e, "[fleet] region view task failed"),
+      }
+    }
+    Ok(buses)
   }
 
   pub async fn observe_fleet(state: &crate::State, scope: &Scope, fleet: Vec<BusEntry>) {

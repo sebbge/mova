@@ -16,6 +16,14 @@
   &.suburban {
     --sheet-header-bg: var(--service-suburban-header);
   }
+
+  &.inter {
+    --sheet-header-bg: var(--service-inter-header);
+  }
+
+  &.neutral {
+    --sheet-header-bg: var(--service-neutral-header);
+  }
 }
 
 .only {
@@ -44,6 +52,14 @@
 
   &.suburban {
     background: var(--service-suburban-list);
+  }
+
+  &.inter {
+    background: var(--service-inter-list);
+  }
+
+  &.neutral {
+    background: var(--service-neutral-list);
   }
 }
 
@@ -120,7 +136,8 @@
   font-weight: 600;
   line-height: 1.1;
 
-  &.zonal {
+  /* our estimate, dotted */
+  &.scheduleGuess {
     border-bottom: 1px dotted currentColor;
   }
 }

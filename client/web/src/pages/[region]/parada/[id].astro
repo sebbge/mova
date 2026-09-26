@@ -2,13 +2,14 @@
 import {PUBLIC_SITE_URL} from 'astro:env/client';
 import Base from '~/layouts/Base.astro';
 import {api} from '~/lib/api/client';
-import {orderedRefs, providerInfo, providerOf, serviceOf} from '~/lib/domain/providers';
+import {orderedRefs, placeKicker, providerInfo, providerOf, serviceOf} from '~/lib/domain/providers';
 import type {Region} from '~/lib/domain/regions';
 import {rawId} from '~/lib/format';
 import LineBadge from '~/lib/line/LineBadge';
 import Arrivals from '~/lib/stop/Arrivals';
 import Header from '~/lib/ui/Header';
 import {href} from '~/lib/ui/href';
+import SourceCredit from '~/lib/ui/SourceCredit';
 import {stopPaths} from '../../_paths';
 
 export const getStaticPaths = stopPaths;
@@ -18,15 +19,19 @@ const stop = await api.stop(Astro.params.id!);
 const name = stop.stop_name;
 const number = rawId(stop.siblings[0] ?? stop.stop_id);
 const siblings = orderedRefs(stop.siblings);
-const suburban = serviceOf(stop.stop_id) === 'suburban';
+const service = serviceOf(stop.stop_id);
+const only = providerInfo(providerOf(stop.stop_id)).only;
+const kicker = placeKicker(stop.stop_id, name);
+const label = kicker ? name : `Parada N° ${number} · ${name}`;
+const place = kicker ? name : `la parada ${number}, ${name}`;
 const lineList = stop.lines
   .map((l) => l.line)
   .slice(0, 8)
   .join(', ');
 
 const description = stop.lines.length
-  ? `Horarios y llegadas en la parada ${number}, ${name}. Líneas ${lineList}.`
-  : `Parada ${number}, ${name}, en ${region.name}.`;
+  ? `Horarios y llegadas en ${place}. Líneas ${lineList}.`
+  : `${kicker ? name : `Parada ${number}, ${name}`}, en ${region.name}.`;
 
 const jsonLd = JSON.stringify({
   '@context': 'https://schema.org',
@@ -39,15 +44,15 @@ const jsonLd = JSON.stringify({
 ---
 
 <Base
-  title={`Parada N° ${number} · ${name} | ${region.name} | bondi`}
+  title={`${label} | ${region.name} | bondi`}
   description={description}
   canonical={`${PUBLIC_SITE_URL}${href.stop(region.slug, stop.stop_id)}`}>
   <script type='application/ld+json' set:html={jsonLd} slot='head' />
   <Header back={href.region(region.slug)} />
 
   <main>
-    <div class:list={['head', {suburban}]}>
-      <span class='kicker'>Parada {number}</span>
+    <div class:list={['head', service]}>
+      <span class='kicker'>{kicker ?? `Parada ${number}`}</span>
       <h1>{name}</h1>
 
       {siblings.length > 1 ? (
@@ -62,7 +67,7 @@ const jsonLd = JSON.stringify({
           ))}
         </nav>
       ) : (
-        <p class='only'>{providerInfo(providerOf(stop.stop_id)).only}</p>
+        only && <p class='only'>{only}</p>
       )}
     </div>
 
@@ -85,6 +90,8 @@ const jsonLd = JSON.stringify({
         </ul>
       )}
     </section>
+
+    <SourceCredit provider={providerOf(stop.stop_id)} />
   </main>
 </Base>
 
@@ -106,6 +113,14 @@ const jsonLd = JSON.stringify({
 
     &.suburban {
       --service: var(--service-suburban-header);
+    }
+
+    &.inter {
+      --service: var(--service-inter-header);
+    }
+
+    &.neutral {
+      --service: var(--service-neutral-header);
     }
   }
 
