@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib/providers/*", "lib/core", "lib/server"]
+members = ["lib/core", "lib/sdk", "lib/transit", "lib/server", "lib/providers/*"]
 resolver = "3"
 
 [workspace.package]
@@ -10,13 +10,15 @@ authors = ["citymob"]
 publish = false
 
 [workspace.dependencies]
-# server nexus
-citymob-nexus-core = { path = "lib/core" }
+# mova
+mova-core = { path = "lib/core" }
+mova-sdk = { path = "lib/sdk" }
+mova-transit = { path = "lib/transit" }
 
 # providers
-citymob-provider-busmatick = { path = "lib/providers/busmatick" }
-citymob-provider-dnt = { path = "lib/providers/dnt" }
-citymob-provider-stm = { path = "lib/providers/stm" }
+mova-provider-busmatick = { path = "lib/providers/busmatick" }
+mova-provider-dnt = { path = "lib/providers/dnt" }
+mova-provider-stm = { path = "lib/providers/stm" }
 
 async-trait = "0.1.92"
 axum = "0.8.9"
@@ -39,7 +41,7 @@ rustls = { version = "0.23.45", default-features = false, features = [
     "logging",
 ] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.151"
+serde_json = { version = "1.0.151", features = ["float_roundtrip"] }
 serde_with = "3.23.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 sqlx = { version = "0.9.0", features = [

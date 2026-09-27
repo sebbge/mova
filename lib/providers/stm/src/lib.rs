@@ -1,5 +1,5 @@
-use citymob_nexus_core as core;
-use core::provider::prelude::*;
+use mova_sdk as sdk;
+use sdk::prelude::*;
 
 mod api;
 mod names;

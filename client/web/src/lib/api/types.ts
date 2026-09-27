@@ -15,7 +15,7 @@ export interface Bus {
   line: string;
   company: string;
   location: Point;
-  speed: number;
+  speed?: number;
   origin?: string;
   destination?: string;
   headsign?: string;
@@ -31,9 +31,6 @@ export interface Bus {
   freshness: BusFreshness;
   still: boolean;
   past_stop: boolean;
-  stale_count: number;
-  miss_count: number;
-  last_seen_epoch: number;
 }
 
 export interface RegionBus extends Bus {

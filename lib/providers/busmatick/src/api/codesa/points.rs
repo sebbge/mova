@@ -1,4 +1,3 @@
-// data/paradas.csv: sheet control points and their municipal codes
 use crate::names::match_key;
 
 use std::collections::HashMap;

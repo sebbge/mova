@@ -1,7 +1,7 @@
 use super::feed::write_entry;
 use super::long_distance::{Corridor, Trip};
 use super::places::Place;
-use crate::core::{Error, Result};
+use crate::sdk::{Error, Result};
 
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write as _;

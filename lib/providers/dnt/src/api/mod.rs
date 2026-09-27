@@ -9,7 +9,7 @@ mod roster;
 mod seguitubus;
 mod synthesis;
 
-use crate::core::provider::prelude::*;
+use crate::sdk::prelude::*;
 
 pub use feed::rebuild as rebuild_feed;
 pub use index::Index;

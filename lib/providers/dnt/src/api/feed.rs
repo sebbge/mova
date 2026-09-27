@@ -1,5 +1,5 @@
 use super::kml::Shape;
-use crate::core::{Error, Result};
+use crate::sdk::{Error, Result};
 
 use std::collections::HashMap;
 use std::io::{Cursor, Read, Write};

@@ -1,5 +1,5 @@
-// <base>/avl.xml, same on every Busmatick Server instance
-use crate::core::provider::prelude::*;
+// <base>/avl.xml same in all Busmatick instances
+use crate::sdk::prelude::*;
 
 use chrono::{DateTime, Duration, FixedOffset, NaiveDateTime, Utc};
 
@@ -84,7 +84,6 @@ impl From<Marker> for BusEntry {
 }
 
 impl Marker {
-  /// `shape_id` resolved by the static source
   pub fn into_bus(self, shape: impl FnOnce(&str, &str) -> Option<String>) -> BusEntry {
     let m = self;
     BusEntry {

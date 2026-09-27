@@ -1,4 +1,4 @@
-use crate::core::format::place_name;
+use crate::sdk::format::place_name;
 
 const EMPRESAS: &[(&str, &str)] = &[("COLEXPRESS", "COLONIAEXPRESS")];
 const LUGARES: &[(&str, &str)] = &[("BSASPORCOLONIA", "COLONIACOMP")];
@@ -31,7 +31,7 @@ fn alias(key: String, table: &[(&str, &str)]) -> String {
   table.iter().find(|(from, _)| *from == key).map_or(key, |(_, to)| to.to_string())
 }
 
-/// IM `codigoEmpresa`, the DNT GTFS `agency_id`
+/// `codigoEmpresa` in IM/STM corresponds to`agency_id` in DNT GTFS.
 pub fn company_name(code: i64) -> String {
   match code {
     10 => "COETC".into(),

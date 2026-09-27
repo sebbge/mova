@@ -1,5 +1,5 @@
-// data/lugares.csv, curated with .project/sources/inter/scripts/lugares.py
-use crate::core::provider::prelude::*;
+// data/lugares.csv, by .project/sources/inter/scripts/lugares.py
+use crate::sdk::prelude::*;
 
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};

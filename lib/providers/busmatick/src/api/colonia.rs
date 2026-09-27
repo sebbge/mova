@@ -1,6 +1,6 @@
-// gtfs.zip of the latest manufarfaro/colonia-gtfs release, data CC BY 4.0
+// gtfs.zip - manufarfaro/colonia-gtfs CC BY 4.0
 use crate::api::csv::fields;
-use crate::core::provider::prelude::*;
+use crate::sdk::prelude::*;
 
 use reqwest::header::{ETAG, LAST_MODIFIED};
 use std::collections::HashMap;
@@ -23,7 +23,6 @@ pub async fn download(client: &reqwest::Client) -> Result<Vec<u8>> {
   http::bytes(res, TAG).await
 }
 
-/// Shape per line and direction, to bind AVL buses
 pub struct Shapes(HashMap<(String, u8), String>);
 
 impl Shapes {
@@ -69,7 +68,6 @@ impl Shapes {
     self.0.is_empty()
   }
 
-  /// `direction_id` from the AVL `tra`: 1 -> 1, 2 and 4 -> 0
   pub fn shape(&self, line: &str, subline: &str) -> Option<String> {
     let direction = match subline {
       "1" => 1,

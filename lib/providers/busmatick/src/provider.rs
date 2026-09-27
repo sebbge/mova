@@ -1,7 +1,7 @@
 use crate::BusmatickConfig;
 use crate::api::colonia::{self, Shapes};
 use crate::api::{self, Marker, codesa};
-use crate::core::provider::prelude::*;
+use crate::sdk::prelude::*;
 
 use std::sync::Arc;
 use std::time::Duration;

@@ -1,5 +1,5 @@
 // https://api.montevideo.gub.uy/apidocs/publictransport
-use crate::core::{Result, http};
+use crate::sdk::{Result, http};
 
 use chrono::{DateTime, Utc};
 use serde::Deserialize;

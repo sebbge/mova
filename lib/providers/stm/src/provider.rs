@@ -1,5 +1,5 @@
 use super::{StmConfig, api::StmApi};
-use crate::core::provider::prelude::*;
+use crate::sdk::prelude::*;
 
 pub struct Stm {
   api: StmApi,
@@ -37,8 +37,8 @@ impl Feed for Stm {
     crate::names::route_name(raw)
   }
 
-  fn platform(&self, raw: &str) -> Option<Platform> {
-    crate::names::platform(raw)
+  fn stop(&self, raw: &str) -> StopName {
+    crate::names::stop_name(raw)
   }
 }
 

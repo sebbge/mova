@@ -1,7 +1,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use citymob_nexus_core::Error;
-use citymob_provider_stm::{StmConfig, provider};
+use mova_provider_stm::{StmConfig, provider};
+use mova_sdk::Error;
 
 fn config() -> StmConfig {
   StmConfig {

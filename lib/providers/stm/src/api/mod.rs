@@ -4,8 +4,8 @@ pub mod models;
 pub mod online;
 use self::auth::StmAuth;
 use self::models::{StmLineBus, StmUpcomingBus};
-use crate::core::limiter::{Limiter, Priority};
-use crate::core::{Error, Result, http};
+use crate::sdk::limiter::{Limiter, Priority};
+use crate::sdk::{Error, Result, http};
 
 use reqwest::{RequestBuilder, Response, StatusCode};
 use std::collections::{HashMap, HashSet};
@@ -212,7 +212,7 @@ impl StmApi {
 }
 
 //# GET <MVD>/buses
-// - whole fleet: realtime location
+// - whole fleet for realtime location
 impl StmApi {
   pub async fn fleet(&self) -> Result<Vec<StmLineBus>> {
     let url = format!("{}/buses", self.url);

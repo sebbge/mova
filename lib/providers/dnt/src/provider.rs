@@ -1,5 +1,5 @@
 use super::api::{self, DntApi, Index};
-use crate::core::provider::prelude::*;
+use crate::sdk::prelude::*;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;

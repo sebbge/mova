@@ -1,5 +1,5 @@
-use citymob_nexus_core::provider::{Provider, Vehicles};
-use citymob_provider_busmatick::{BusmatickConfig, codesa, copay, mdoturismo, micro, microrivera, solantigua};
+use mova_provider_busmatick::{BusmatickConfig, codesa, copay, mdoturismo, micro, microrivera, solantigua};
+use mova_sdk::{provider::Provider, vehicles::Vehicles};
 
 fn config(base: &str) -> BusmatickConfig {
   BusmatickConfig { base: base.to_string() }

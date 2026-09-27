@@ -1,7 +1,7 @@
 // https://api.montevideo.gub.uy/apidocs/publictransport
-use crate::core::bus::{BusEntry, UpcomingArrival};
-use crate::core::format;
-use crate::core::geo::Point;
+use crate::sdk::format;
+use crate::sdk::geo::Point;
+use crate::sdk::{arrivals::UpcomingArrival, vehicles::BusEntry};
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer};
@@ -25,15 +25,13 @@ pub struct StmBus {
   pub origin: Option<String>,
   pub destination: Option<String>,
 
-  // CO2 emissions
   #[serde(default, deserialize_with = "deser_label")]
-  pub emissions: Option<String>,
-  // AC unit
+  pub emissions: Option<String>, // CO2 emissions
+
   #[serde(default, deserialize_with = "deser_label")]
-  pub thermal_confort: Option<String>,
-  // accessibility
+  pub thermal_confort: Option<String>, // AC unit
   #[serde(default, deserialize_with = "deser_label")]
-  pub access: Option<String>,
+  pub access: Option<String>, // accessibility
 }
 
 impl From<StmBus> for BusEntry {

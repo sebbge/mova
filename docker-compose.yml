@@ -1,9 +1,9 @@
-name: citymob
+name: mova
 
 services:
   db:
     image: postgis/postgis:15-3.3
-    container_name: citymob_db
+    container_name: mova_pt_db
     restart: always
     environment:
       - POSTGRES_USER=admin
@@ -20,7 +20,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: citymob_redis
+    container_name: mova_pt_redis
     restart: always
     ports:
       - '6379:6379'

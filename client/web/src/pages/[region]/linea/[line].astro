@@ -40,7 +40,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
 ---
 
 <Base
-  title={`${line}${longName ? ` · ${longName}` : ''} | ${region.name} | bondi`}
+  title={`${line}${longName ? ` · ${longName}` : ''} | ${region.name} | Bondi`}
   description={`Recorrido y paradas de la línea ${line} de ${region.name}${longName ? `: ${longName}` : ''}.`}
   canonical={`${PUBLIC_SITE_URL}${href.line(region.slug, line)}`}>
   <Header back={href.region(region.slug)} />

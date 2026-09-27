@@ -1,5 +1,6 @@
-// <base>/Paradas/{line}_{subline}.kmz and <base>/Recorridos/{line}_{subline}.kmz
-use crate::core::provider::prelude::*;
+// <base>/Paradas/{line}_{subline}.kmz
+// <base>/Recorridos/{line}_{subline}.kmz
+use crate::sdk::prelude::*;
 
 use std::io::{Cursor, Read};
 
@@ -33,7 +34,7 @@ pub fn stops(kml: &str) -> Vec<Stop> {
     .skip(1)
     .filter_map(|block| {
       let name = unescape(between(block, "<name>", "</name>")?);
-      let (code, name) = crate::names::stop(&name)?;
+      let (code, name) = crate::names::split_stop(&name)?;
       let (lng, lat) = *coordinates(between(block, "<coordinates>", "</coordinates>")?).first()?;
       Some(Stop { code: code.to_string(), name: name.to_string(), location: Point { lat, lng } })
     })

@@ -1,5 +1,5 @@
 // https://catalogodatos.gub.uy CKAN
-use crate::core::provider::prelude::*;
+use crate::sdk::prelude::*;
 
 use serde::Deserialize;
 

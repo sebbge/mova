@@ -298,93 +298,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "citymob-nexus"
-version = "0.1.0"
-dependencies = [
- "axum",
- "brotli",
- "chrono",
- "citymob-nexus-core",
- "citymob-provider-busmatick",
- "citymob-provider-dnt",
- "citymob-provider-stm",
- "dotenvy",
- "flate2",
- "gtfs-structures",
- "redis",
- "reqwest",
- "serde",
- "serde_json",
- "serde_with",
- "sqlx",
- "tokio",
- "tower-http 0.7.1",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "citymob-nexus-core"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "reqwest",
- "rustls",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "citymob-provider-busmatick"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "citymob-nexus-core",
- "futures-util",
- "gtfs-structures",
- "reqwest",
- "tokio",
- "tracing",
- "zip",
-]
-
-[[package]]
-name = "citymob-provider-dnt"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "citymob-nexus-core",
- "gtfs-structures",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "zip",
-]
-
-[[package]]
-name = "citymob-provider-stm"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "chrono",
- "citymob-nexus-core",
- "dotenvy",
- "futures-util",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "cmov"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1555,6 +1468,115 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mova-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "mova-provider-busmatick"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures-util",
+ "gtfs-structures",
+ "mova-sdk",
+ "reqwest",
+ "tokio",
+ "tracing",
+ "zip",
+]
+
+[[package]]
+name = "mova-provider-dnt"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "gtfs-structures",
+ "mova-sdk",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zip",
+]
+
+[[package]]
+name = "mova-provider-stm"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "dotenvy",
+ "futures-util",
+ "mova-sdk",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "mova-sdk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "mova-core",
+ "reqwest",
+ "rustls",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "mova-server"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "dotenvy",
+ "mova-provider-busmatick",
+ "mova-provider-dnt",
+ "mova-provider-stm",
+ "mova-sdk",
+ "mova-transit",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower-http 0.7.1",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "mova-transit"
+version = "0.1.0"
+dependencies = [
+ "brotli",
+ "chrono",
+ "flate2",
+ "gtfs-structures",
+ "mova-sdk",
+ "redis",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

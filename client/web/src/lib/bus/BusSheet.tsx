@@ -41,7 +41,13 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
         <dl class={styles.facts}>
           <div>
             <dt>Velocidad</dt>
-            <dd>{props.bus.still ? 'Detenido' : `${Math.round(props.bus.speed)} km/h`}</dd>
+            <dd>
+              {props.bus.still
+                ? 'Detenido'
+                : props.bus.speed === undefined
+                  ? '—'
+                  : `${Math.round(props.bus.speed)} km/h`}
+            </dd>
           </div>
           <div>
             <dt>Empresa</dt>

@@ -1,6 +1,6 @@
 // https://seguitubus.trescruces.com.uy SeguíTuBus, Tres Cruces
 use super::index::Index;
-use crate::core::provider::prelude::*;
+use crate::sdk::prelude::*;
 
 use chrono::{Datelike, FixedOffset, NaiveDateTime, Utc};
 use serde::Deserialize;
@@ -16,8 +16,7 @@ struct Envelope {
 
 #[derive(Deserialize)]
 struct Listing {
-  #[serde(default)]
-  #[serde(rename = "servicios")]
+  #[serde(rename = "servicios", default)]
   services: Vec<Service>,
   #[serde(default)]
   pass: i64,

@@ -1,7 +1,7 @@
 #![allow(clippy::expect_used, clippy::unwrap_used)]
 
-use citymob_nexus_core::provider::Vehicles;
-use citymob_provider_stm::{StmConfig, provider};
+use mova_provider_stm::{StmConfig, provider};
+use mova_sdk::vehicles::Vehicles;
 
 use std::collections::HashSet;
 use std::time::{Duration, Instant};

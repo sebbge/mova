@@ -121,7 +121,11 @@
       "italic": false
     }
   ],
-  "material-icon-theme.folders.associations": {},
+  "material-icon-theme.folders.associations": {
+    "transit": "routes",
+    "entities": "metro",
+    "sdk": "tools"
+  },
   "material-icon-theme.files.customClones": [
     {
       "name": "rust-mod",

@@ -12,7 +12,7 @@ export default function Explore() {
   const selection = new MapSelection(new MapUrl());
 
   createEffect(() => {
-    document.title = `${selection.lineId ? `Línea ${selection.lineId} en el mapa` : 'Mapa'} | bondi`;
+    document.title = `${selection.lineId ? `Línea ${selection.lineId} en el mapa` : 'Mapa'} | Bondi`;
   });
 
   return (

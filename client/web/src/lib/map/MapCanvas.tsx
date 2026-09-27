@@ -80,7 +80,7 @@ export default function MapCanvas(props: {
 
     instance.on('error', (e) => {
       setError(e.error?.message ?? 'No se pudo cargar el mapa');
-      console.error('[bondi/map]', e.error ?? e);
+      console.error('[mova/map]', e.error ?? e);
     });
 
     const addLayers = () => {

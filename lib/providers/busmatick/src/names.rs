@@ -1,4 +1,4 @@
-use crate::core::format::place_name;
+use crate::sdk::format::place_name;
 
 const QUALIFIERS: [&str; 5] = [" DESDE ", " DE ", " X ", " POR ", " A "];
 const PREFIXES: [&str; 2] = ["DIRECTO ", "EXPRESO "];
@@ -29,14 +29,14 @@ pub fn match_key(raw: &str) -> String {
   raw.chars().filter(char::is_ascii_alphanumeric).map(|c| c.to_ascii_uppercase()).collect()
 }
 
-pub fn stop(raw: &str) -> Option<(&str, &str)> {
+pub fn split_stop(raw: &str) -> Option<(&str, &str)> {
   let (code, name) = raw.trim().split_once(' ')?;
   code.chars().all(|c| c.is_ascii_digit()).then(|| (code, name.trim()))
 }
 
 #[cfg(test)]
 mod tests {
-  use super::{destination, match_key, stop};
+  use super::{destination, match_key, split_stop};
 
   #[test]
   fn destination_comes_from_operator_label() {
@@ -58,7 +58,7 @@ mod tests {
 
   #[test]
   fn splits_code_and_name() {
-    assert_eq!(stop("139 SAN CARLOS"), Some(("139", "SAN CARLOS")));
-    assert_eq!(stop("24/5 P. DEL ESTE"), None);
+    assert_eq!(split_stop("139 SAN CARLOS"), Some(("139", "SAN CARLOS")));
+    assert_eq!(split_stop("24/5 P. DEL ESTE"), None);
   }
 }

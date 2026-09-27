@@ -30,7 +30,7 @@ export class RegionStops {
       pending.map((r) =>
         api.stops(r.id).catch((e) => {
           this.#loaded.delete(r.id);
-          console.error('[bondi/map] could not load stops for', r.id, e);
+          console.error('[mova/map] could not load stops for', r.id, e);
           return [] as StopItem[];
         })
       )

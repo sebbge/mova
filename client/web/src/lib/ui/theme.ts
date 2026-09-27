@@ -1,6 +1,6 @@
 import {createRoot, createSignal} from 'solid-js';
 
-const KEY = 'bondi-theme'; // Base.astro's inline script reads it too
+const KEY = 'theme'; // Base.astro's inline script reads it too
 
 function stored(): string | null {
   try {

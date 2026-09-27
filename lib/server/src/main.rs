@@ -1,67 +1,28 @@
-use citymob_nexus_core as core;
+use mova_sdk as sdk;
+use mova_transit as transit;
 
 mod provider {
-  pub use citymob_provider_busmatick as busmatick;
-  pub use citymob_provider_dnt as dnt;
-  pub use citymob_provider_stm as stm;
+  pub use mova_provider_busmatick as busmatick;
+  pub use mova_provider_dnt as dnt;
+  pub use mova_provider_stm as stm;
 }
 
-mod cache;
-mod domain;
 mod error;
-mod helpers;
-mod tasks;
+mod handlers;
+mod middleware;
 
-use self::cache::Cache;
-use self::core::provider::Provider;
-use self::domain::scope::Scope;
-use self::domain::{handlers, middleware};
 pub use self::error::{Error, Result};
+use self::sdk::provider::Provider;
+use self::transit::{Transit, TransitConfig};
 
 use std::sync::Arc;
 
 pub type Res<T> = Result<axum::Json<T>>;
-pub type Db = sqlx::PgPool;
-
-pub type GtfsVersions = Arc<tokio::sync::RwLock<std::collections::BTreeMap<String, String>>>;
-
-pub fn versions_token(versions: &std::collections::BTreeMap<String, String>) -> String {
-  if versions.is_empty() {
-    return "none".into();
-  }
-  versions.iter().map(|(p, v)| format!("{p}={v}")).collect::<Vec<_>>().join(";")
-}
 
 struct Server {
-  providers: Vec<Arc<Provider>>,
-  db: Db,
-  tasks_db: Db,
-  cache: Cache,
-  gtfs_versions: GtfsVersions,
-  rebuild_webhook: Option<String>,
+  transit: Transit,
 }
 impl Server {
-  pub fn scopes(&self) -> impl Iterator<Item = Scope> + '_ {
-    self.providers.iter().cloned().map(Scope::new)
-  }
-
-  pub fn handles(&self) -> Vec<Arc<Provider>> {
-    self.providers.clone()
-  }
-
-  pub fn priority(&self) -> Vec<String> {
-    self.providers.iter().map(|p| p.id.to_string()).collect()
-  }
-
-  pub fn resolve(&self, provider: &str) -> Result<Scope> {
-    let handle = self
-      .providers
-      .iter()
-      .find(|p| p.id == provider)
-      .ok_or_else(|| Error::NotFound(format!("unknown provider: {provider}")))?;
-    Ok(Scope::new(handle.clone()))
-  }
-
   pub fn router(state: State) -> axum::Router<State> {
     use axum::routing::get;
 
@@ -78,7 +39,7 @@ impl Server {
     // GTFS
     let schedule = axum::Router::new()
       .route("/stop/schedule/{provider}/{id}", get(handlers::stop::schedule))
-      .layer(axum::middleware::from_fn_with_state(state.gtfs_versions.clone(), middleware::gtfs_daily_cache));
+      .layer(axum::middleware::from_fn_with_state(state.clone(), middleware::gtfs_daily_cache));
 
     // realtime
     let realtime = axum::Router::new()
@@ -89,20 +50,6 @@ impl Server {
 
     gtfs.merge(schedule).merge(realtime)
   }
-
-  pub async fn web_rebuild(&self) {
-    let Some(url) = self.rebuild_webhook.as_deref() else {
-      return;
-    };
-
-    match reqwest::Client::new().post(url).send().await {
-      Ok(res) if res.status().is_success() => {
-        tracing::info!(status = res.status().as_u16(), "[gtfs] web rebuild")
-      }
-      Ok(res) => tracing::warn!(status = res.status().as_u16(), "[gtfs] webhook non-2xx"),
-      Err(e) => tracing::warn!(error = %e, "[gtfs] couldn't rebuild"),
-    }
-  }
 }
 
 #[derive(Clone)]
@@ -112,39 +59,9 @@ impl State {
   async fn build() -> State {
     dotenvy::dotenv().ok();
 
-    let postgres_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
     let rebuild_webhook = std::env::var("REBUILD_WEBHOOK_URL").ok().filter(|u| !u.trim().is_empty());
-
-    let sync = 2 * 3600;
-
-    let postgres = sqlx::postgres::PgPoolOptions::new()
-      .max_connections(10)
-      .connect(&postgres_url)
-      .await
-      .expect("failed to connect to database");
-    sqlx::migrate!().run(&postgres).await.expect("failed to run migrations");
-
-    let tasks_db = {
-      use sqlx::ConnectOptions;
-      let options = (*postgres.connect_options())
-        .clone()
-        .log_slow_statements(tracing::log::LevelFilter::Warn, std::time::Duration::from_secs(30));
-      sqlx::postgres::PgPoolOptions::new().max_connections(2).connect_lazy_with(options)
-    };
-
-    let versions: Vec<(String, String)> = sqlx::query_as("SELECT provider, version FROM gtfs_metadata")
-      .fetch_all(&postgres)
-      .await
-      .expect("failed to read gtfs versions");
-    let gtfs_versions = Arc::new(tokio::sync::RwLock::new(versions.into_iter().collect()));
-
-    let redis = redis::Client::open(redis_url)
-      .expect("invalid REDIS_URL")
-      .get_multiplexed_async_connection()
-      .await
-      .expect("failed to connect to Redis");
-    let cache = Cache::new(redis, sync);
 
     let providers: Vec<Arc<Provider>> = vec![
       Arc::new(provider::stm::provider(stm_conf()).expect("stm: invalid config")),
@@ -160,18 +77,10 @@ impl State {
       ),
     ];
 
-    for provider in &providers {
-      tracing::info!(provider = provider.id, authority = %provider.authority, regions = ?provider.regions, "[bootstrap] loaded");
+    let config = TransitConfig { database_url, redis_url, providers, rebuild_webhook };
+    let transit = Transit::connect(config).await.expect("failed to start transit");
 
-      #[cfg(debug_assertions)]
-      {
-        // DEBUG: force cache cold start
-        use cache::Flush;
-        cache.flush_region(provider.authority).await;
-      }
-    }
-
-    State(Arc::new(Server { providers, db: postgres, tasks_db, cache, gtfs_versions, rebuild_webhook }))
+    State(Arc::new(Server { transit }))
   }
 }
 
@@ -231,7 +140,7 @@ async fn main() {
   }
 
   let state = State::build().await;
-  tasks::spawn(&state);
+  state.transit.spawn_tasks();
 
   let app = Server::router(state.clone())
     .layer(TraceLayer::new_for_http())

@@ -1,5 +1,5 @@
 [package]
-name = "citymob-provider-busmatick"
+name = "mova-provider-busmatick"
 authors.workspace = true
 version.workspace = true
 edition.workspace = true
@@ -7,7 +7,7 @@ rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-citymob-nexus-core.workspace = true
+mova-sdk.workspace = true
 
 async-trait.workspace = true
 chrono.workspace = true
