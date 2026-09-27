@@ -6,7 +6,8 @@ import parts from '~/lib/ui/sheet/parts.module.css';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import SheetTabs from '~/lib/ui/sheet/SheetTabs';
 import SourceCredit from '~/lib/ui/SourceCredit';
-import LineBadge from './LineBadge';
+import {fullStopName, splitCompanyLine} from '~/lib/format';
+import LineLead from './LineLead';
 import styles from './LineSheet.module.css';
 import RouteSkeleton from './RouteSkeleton';
 
@@ -27,7 +28,14 @@ export default function LineSheet(props: {
   onSelect?: (routeId: string, direction?: number) => void;
   onSelectStop?: (stopId: string, stopName?: string) => void;
 }) {
-  const tint = () => companyTint(props.company);
+  const inter = () => providerOf(props.routeId ?? '') === 'inter' || props.variants[0]?.region === 'uy';
+  const split = () =>
+    props.company
+      ? splitCompanyLine(props.line, props.company)
+      : inter()
+        ? splitCompanyLine(props.line)
+        : {line: props.line};
+  const tint = () => companyTint(props.company || split().company);
   const directions = () => {
     const available = new Set(props.shape?.available_directions.map((d) => d.direction_id) ?? []);
     return DIRECTIONS.map((d) => ({...d, disabled: !available.has(Number(d.id)) || !props.routeId}));
@@ -37,10 +45,10 @@ export default function LineSheet(props: {
     <>
       <div class={`${parts.band} ${parts.onTint}`} style={{'--sheet-header-bg': tint().header}}>
         <SheetHeader
-          title={props.shape?.headsign ?? props.variants[0]?.route_long_name ?? `Línea ${props.line}`}
+          title={props.shape?.headsign ?? props.variants[0]?.route_long_name ?? `Línea ${split().line}`}
           subtitle={props.origin ? `desde ${props.origin}` : ''}
           loading={props.loading}
-          lead={<LineBadge line={props.line} variant='plain' />}
+          lead={<LineLead line={split().line} company={split().company} />}
         />
       </div>
 
@@ -103,7 +111,7 @@ export default function LineSheet(props: {
                     <li>
                       <button onClick={() => props.onSelectStop?.(stop.stop_id, stop.stop_name)}>
                         <span class={styles.id}>{stop.stop_id}</span>
-                        <span class={styles.name}>{stop.stop_name}</span>
+                        <span class={styles.name}>{fullStopName(stop.stop_name, stop.station)}</span>
                       </button>
                     </li>
                   )}

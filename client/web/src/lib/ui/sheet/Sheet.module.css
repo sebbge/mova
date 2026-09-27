@@ -28,7 +28,7 @@
   border: 0;
   border-radius: var(--radius-pill);
   background: none;
-  color: var(--service-on);
+  color: var(--service-header-on);
   cursor: pointer;
 
   &:hover {

@@ -1,8 +1,17 @@
 import type {FeatureCollection} from 'geojson';
 import type {ExpressionSpecification, GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import type {StopItem} from '~/lib/api/types';
-import {comboKey, providerInfo, SERVICE_COMBOS, SERVICES, serviceOf, type Service} from '~/lib/domain/providers';
+import {
+  comboKey,
+  isTerminalStop,
+  providerInfo,
+  SERVICE_COMBOS,
+  SERVICES,
+  serviceOf,
+  type Service,
+} from '~/lib/domain/providers';
 import {STOP_PIN_PIXEL_RATIO, stopDotImage, stopPinImage} from '~/lib/map/images/stopPin';
+import {mapText} from '~/lib/map/paint';
 
 export type StopsSource = 'stops' | 'route-stops';
 
@@ -30,24 +39,23 @@ const imageExpr = (kind: 'pin' | 'dot'): ExpressionSpecification => [
 export const stopsLayer = {
   HITS: ['route-stops-pin', 'route-stops-dot', 'stops-pin', 'stops-dot'],
 
-  addImages(map: MapLibreMap) {
+  // re-baked on theme change
+  bakeImages(map: MapLibreMap) {
+    const bake = (id: string, image: ImageData | null) => {
+      if (!image) return;
+      if (map.hasImage(id)) map.updateImage(id, image);
+      else map.addImage(id, image, {pixelRatio: STOP_PIN_PIXEL_RATIO});
+    };
     for (const combo of SERVICE_COMBOS) {
       for (const selected of [false, true]) {
-        const pin = imageId('pin', combo, selected);
-        const dot = imageId('dot', combo, selected);
-        if (!map.hasImage(pin)) {
-          const image = stopPinImage(selected, combo, selected ? 92 : 80);
-          if (image) map.addImage(pin, image, {pixelRatio: STOP_PIN_PIXEL_RATIO});
-        }
-        if (!map.hasImage(dot)) {
-          const image = stopDotImage(selected, combo);
-          if (image) map.addImage(dot, image, {pixelRatio: STOP_PIN_PIXEL_RATIO});
-        }
+        bake(imageId('pin', combo, selected), stopPinImage(selected, combo, selected ? 92 : 80));
+        bake(imageId('dot', combo, selected), stopDotImage(selected, combo));
       }
     }
   },
 
   add(map: MapLibreMap, source: StopsSource) {
+    const text = mapText();
     map.addSource(source, {type: 'geojson', data: features([], {selectedId: null, siblings: [], dim: false})});
     map.addLayer({
       id: `${source}-dot`,
@@ -74,8 +82,22 @@ export const stopsLayer = {
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'symbol-sort-key': ORDER,
+        // platform under the pin
+        'text-field': ['get', 'platform'],
+        'text-font': ['Noto Sans Medium'],
+        'text-size': 12,
+        'text-anchor': 'top',
+        'text-offset': [0, 1.6],
+        'text-allow-overlap': true,
+        'text-ignore-placement': true,
       },
-      paint: {'icon-opacity': OPACITY},
+      paint: {
+        'icon-opacity': OPACITY,
+        'text-color': text.color,
+        'text-halo-color': text.halo,
+        'text-halo-width': 1.5,
+        'text-opacity': OPACITY,
+      },
     });
   },
 
@@ -95,10 +117,16 @@ function features(stops: StopItem[], marks: StopsMarks): FeatureCollection {
       const selected = stop.id === marks.selectedId || marks.siblings.includes(stop.id);
       return {
         type: 'Feature' as const,
-        geometry: {type: 'Point' as const, coordinates: [stop.lng, stop.lat]},
+        geometry: {
+          type: 'Point' as const,
+          // a regular stop next to a terminal stays at its corner
+          coordinates:
+            stop.footprint && isTerminalStop(stop.name, stop.station) ? centroid(stop.footprint) : [stop.lng, stop.lat],
+        },
         properties: {
           stop_id: stop.id,
           stop_name: stop.name,
+          platform: stop.platform ? `A${stop.platform}` : '',
           service: comboKey(SERVICES.filter((s) => services.has(s))),
           dim: marks.dim && !selected,
           muted: marks.selectedId != null && !selected,
@@ -107,4 +135,19 @@ function features(stops: StopItem[], marks: StopsMarks): FeatureCollection {
       };
     }),
   };
+}
+
+// pin mid-terminal
+function centroid(footprint: number[]): [number, number] {
+  let area = 0;
+  let x = 0;
+  let y = 0;
+  for (let i = 0; i + 3 < footprint.length; i += 2) {
+    const [x0, y0, x1, y1] = footprint.slice(i, i + 4);
+    const cross = x0 * y1 - x1 * y0;
+    area += cross;
+    x += (x0 + x1) * cross;
+    y += (y0 + y1) * cross;
+  }
+  return area ? [x / (3 * area), y / (3 * area)] : [footprint[0], footprint[1]];
 }

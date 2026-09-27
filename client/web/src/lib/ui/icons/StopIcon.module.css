@@ -4,7 +4,7 @@
   place-items: center;
   width: var(--pin-size);
   height: var(--pin-size);
-  color: var(--service-on);
+  color: var(--service-header-on);
 
   svg {
     display: block;

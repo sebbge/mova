@@ -40,6 +40,13 @@ impl Provider {
   }
 }
 
+/// Stop published as a station platform
+pub struct Platform {
+  pub station: String,
+  pub name: String,
+  pub code: String,
+}
+
 pub struct Static {
   pub gtfs: Vec<u8>,
   pub lines_by_stop: Option<LinesByStop>,
@@ -58,6 +65,10 @@ pub trait Feed: Send + Sync {
   }
   fn line(&self, raw: &str) -> String {
     format::line_name(raw)
+  }
+  /// Stations recognized by name, per provider
+  fn platform(&self, _raw: &str) -> Option<Platform> {
+    None
   }
 }
 
@@ -85,7 +96,7 @@ pub trait Arrivals: Send + Sync {
 
 pub mod prelude {
   pub use super::{
-    Arrivals, BusesByLine, Feed, Fleet, LineBuses, LinesByStop, Provider, Static, UpcomingByLine, Vehicles,
+    Arrivals, BusesByLine, Feed, Fleet, LineBuses, LinesByStop, Platform, Provider, Static, UpcomingByLine, Vehicles,
   };
   pub use crate::bus::{BusEntry, StopRef, UpcomingArrival};
   pub use crate::geo::Point;

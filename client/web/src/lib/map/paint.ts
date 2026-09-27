@@ -30,6 +30,11 @@ export function token(name: string, fallback: string): string {
   return a === 255 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${(a / 255).toFixed(3)})`;
 }
 
+// theme color with halo
+export function mapText(): {color: string; halo: string} {
+  return {color: token('--text-primary', '#1b1d22'), halo: token('--surface', '#ffffff')};
+}
+
 // gray without a company
 export function routeColor(company: string | undefined): string {
   return token(`--company-${companySlug(company) ?? 'unknown'}`, '#8a8f98');
@@ -40,7 +45,7 @@ export function outline(): string {
 }
 
 export function pinColor(service: Service): string {
-  return token(`--service-${service}`, PIN_FALLBACK[service]);
+  return token(`--service-${service}-pin`, PIN_FALLBACK[service]);
 }
 
 export function pinOutline(service: Service): string {

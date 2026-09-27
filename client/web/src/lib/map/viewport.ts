@@ -1,4 +1,4 @@
-import type {LngLatBounds, Map as MapLibreMap} from 'maplibre-gl';
+import {MercatorCoordinate, type LngLatBounds, type LngLatBoundsLike, type Map as MapLibreMap} from 'maplibre-gl';
 
 export const STOPS_MAX_KM2 = 400;
 
@@ -32,4 +32,21 @@ export function stopsZoom(map: MapLibreMap): number {
   const km2 = viewportKm2(map.getBounds());
   const target = STOPS_MAX_KM2 * 0.85;
   return km2 <= target ? zoom : zoom + Math.log2(km2 / target) / 2;
+}
+
+// whole country, whatever the ratio
+export function fitCountry(map: MapLibreMap, bounds: LngLatBoundsLike) {
+  const {clientWidth: w, clientHeight: h} = map.getContainer();
+  const fit = w && h ? map.cameraForBounds(bounds, {padding: 24}) : undefined;
+  if (!fit?.center || fit.zoom === undefined) return;
+  const c = MercatorCoordinate.fromLngLat(fit.center);
+  const world = 512 * 2 ** fit.zoom;
+  const dx = w / 2 / world;
+  const dy = h / 2 / world;
+  map.setMaxBounds(null);
+  map.setMinZoom(fit.zoom);
+  map.setMaxBounds([
+    new MercatorCoordinate(c.x - dx, c.y + dy).toLngLat(),
+    new MercatorCoordinate(c.x + dx, c.y - dy).toLngLat(),
+  ]);
 }

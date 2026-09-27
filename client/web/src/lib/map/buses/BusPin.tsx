@@ -1,5 +1,6 @@
 import {createEffect, createSignal, on, Show, untrack} from 'solid-js';
 import type {Bus, BusFreshness} from '~/lib/api/types';
+import {splitCompanyLine} from '~/lib/format';
 import {companyOutlineVar, companyVar} from '~/lib/ui/palette';
 import styles from './BusPin.module.css';
 
@@ -11,6 +12,9 @@ const PRECISION: Record<BusFreshness, string> = {
 
 export default function BusPin(props: {bus: Bus; dimmed?: boolean; onSelect?: (bus: Bus) => void}) {
   const hasDirection = () => props.bus.bearing_deg != null && !props.bus.still;
+  const parts = () =>
+    props.bus.company ? splitCompanyLine(props.bus.line, props.bus.company) : {line: props.bus.line};
+  const number = () => parts().line;
 
   // shortest turn, 350° -> 10° is 20°
   let heading = untrack(() => props.bus.bearing_deg) ?? 0;
@@ -49,11 +53,15 @@ export default function BusPin(props: {bus: Bus; dimmed?: boolean; onSelect?: (b
         </span>
       </Show>
 
-      <span
-        class={styles.badge}
-        classList={{[styles.long]: props.bus.line.length > 3, [styles.xlong]: props.bus.line.length > 4}}>
-        {props.bus.line}
+      <span class={styles.badge} classList={{[styles.long]: number().length > 3, [styles.xlong]: number().length > 4}}>
+        {number()}
       </span>
+
+      <Show when={parts().company}>
+        <span class={styles.company} aria-hidden='true'>
+          {props.bus.company}
+        </span>
+      </Show>
     </button>
   );
 }

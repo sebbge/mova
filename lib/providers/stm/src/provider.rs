@@ -36,6 +36,10 @@ impl Feed for Stm {
   fn route(&self, raw: &str) -> String {
     crate::names::route_name(raw)
   }
+
+  fn platform(&self, raw: &str) -> Option<Platform> {
+    crate::names::platform(raw)
+  }
 }
 
 #[async_trait::async_trait]

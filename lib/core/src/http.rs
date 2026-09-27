@@ -5,7 +5,14 @@ use std::time::Duration;
 
 pub fn client(timeout: Duration) -> Result<reqwest::Client> {
   let _ = rustls::crypto::ring::default_provider().install_default();
-  reqwest::Client::builder().timeout(timeout).build().map_err(|e| Error::Config(format!("http client: {e}")))
+  let builder = reqwest::Client::builder().tls_backend_rustls().timeout(timeout);
+  builder.build().map_err(|e| Error::Config(format!("http client: {e}")))
+}
+
+/// For servers that only negotiate RSA key exchange, unsupported by rustls
+pub fn legacy_tls_client(timeout: Duration) -> Result<reqwest::Client> {
+  let builder = reqwest::Client::builder().tls_backend_native().timeout(timeout);
+  builder.build().map_err(|e| Error::Config(format!("http client: {e}")))
 }
 
 pub async fn send(req: RequestBuilder, tag: &str) -> Result<Response> {

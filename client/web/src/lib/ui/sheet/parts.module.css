@@ -1,7 +1,9 @@
 .band {
   --sheet-header-gap: var(--space-1);
-  --sheet-header-fg: var(--service-on);
-  --sheet-header-muted: var(--service-on-muted);
+  --sheet-header-fg: var(--service-header-on);
+  --sheet-header-muted: var(--service-header-on-muted);
+  --skeleton: var(--skeleton-on-header);
+  --skeleton-sheen: var(--skeleton-on-header-sheen);
   margin: 0 calc(var(--gutter) * -1);
   padding: 0 var(--gutter);
   background: var(--sheet-header-bg);
@@ -11,4 +13,9 @@
   --skeleton: var(--skeleton-on-tint);
   --skeleton-sheen: var(--skeleton-on-tint-sheen);
   --scrollbar: var(--scrollbar-on-tint);
+}
+
+.band.onTint {
+  --skeleton: var(--skeleton-on-header);
+  --skeleton-sheen: var(--skeleton-on-header-sheen);
 }

@@ -1,0 +1,72 @@
+---
+import ThemeToggle from './ThemeToggle';
+
+interface Props {
+  back?: string;
+}
+
+const {back} = Astro.props;
+---
+
+<header>
+  <div class='inner'>
+    {back && (
+      <a class='back' href={back} aria-label='Volver'>
+        <svg viewBox='0 0 24 24' width='22' height='22' aria-hidden='true'>
+          <path
+            d='M15 5l-7 7 7 7'
+            fill='none'
+            stroke='currentColor'
+            stroke-width='2'
+            stroke-linecap='round'
+            stroke-linejoin='round'
+          />
+        </svg>
+      </a>
+    )}
+    <a class='brand' href='/'>
+      bondi
+    </a>
+    <ThemeToggle client:load />
+  </div>
+</header>
+
+<style>
+  header {
+    background: var(--brand);
+    color: var(--brand-contrast);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .inner {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-3) var(--gutter);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .brand {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+
+    &:hover {
+      text-decoration: none;
+    }
+  }
+
+  .back {
+    display: inline-flex;
+    margin-left: calc(var(--space-2) * -1);
+    padding: var(--space-1);
+    border-radius: var(--radius-pill);
+
+    &:hover {
+      background: var(--hover-tint);
+    }
+  }
+</style>

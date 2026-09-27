@@ -1,12 +1,12 @@
 :root {
-  --brand: #29a249;
+  --brand: oklch(0.54 0.08 165);
 
   --brand-dark: hsl(from var(--brand) h calc(s * 0.45) 11%);
   --brand-light: hsl(from var(--brand) h s 31%);
   --brand-contrast: hsl(from var(--brand) h s 100%);
 
-  --map-outline: #ffffff;
+  --map-outline: oklch(1 0 0);
 
-  --bus: #1565c0;
-  --walk: #757575;
+  --bus: oklch(0.5134 0.1603 255.67);
+  --walk: oklch(0.5624 0 0);
 }

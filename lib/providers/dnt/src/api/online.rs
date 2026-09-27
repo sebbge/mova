@@ -56,7 +56,7 @@ impl From<OnlineBus> for BusEntry {
       id: BusEntry::identity(&bus.company_code.to_string(), &bus.bus_code.to_string()),
       unit: bus.bus_code.to_string(),
       line: format::line_name(&bus.line),
-      company: String::new(),
+      company: crate::names::company_name(bus.company_code),
       location: bus.location,
       speed: bus.speed,
       shape_id: Some(bus.variant.to_string()),

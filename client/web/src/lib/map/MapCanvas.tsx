@@ -9,16 +9,18 @@ import {
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import {Protocol} from 'pmtiles';
-import {createEffect, createSignal, Match, onCleanup, onMount, Switch} from 'solid-js';
+import {createEffect, createSignal, Match, on, onCleanup, onMount, Switch} from 'solid-js';
 import type {Bus, RouteShape, StopItem} from '~/lib/api/types';
 import {DEFAULT_REGION, regionsInView, type MapCamera} from '~/lib/domain/regions';
+import {theme} from '~/lib/ui/theme';
 import {BusLayer} from './buses/BusLayer';
 import {routeLayer} from './layers/route';
 import {stopsLayer} from './layers/stops';
+import {terminalsLayer} from './layers/terminals';
 import styles from './MapCanvas.module.css';
 import {RegionStops} from './RegionStops';
 import {ATTRIBUTION, basemapStyle} from './style';
-import {overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, viewportKm2} from './viewport';
+import {fitCountry, overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, viewportKm2} from './viewport';
 
 const CAMERA_MS = 400;
 const FOCUS_MS = 500;
@@ -32,7 +34,8 @@ export default function MapCanvas(props: {
   selectedStopId: string | null;
   selectedSiblings: readonly string[];
   selectedStop?: {stop_id: string; lat: number; lng: number} | null; // camera before its region loads
-  followBusId: string | null;
+  selectedBusId: string | null; // highlighted, camera stays
+  followBusId: string | null; // user set, tapping the open bus's pin
   onSelectStop?: (stopId: string, stopName?: string) => void;
   onSelectBus?: (bus: Bus) => void;
   onBackground?: () => void;
@@ -50,17 +53,15 @@ export default function MapCanvas(props: {
     setWorkerUrl(workerUrl);
     addProtocol('pmtiles', new Protocol().tile);
     const camera = props.camera;
-    const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+    let styledDark = theme.dark;
 
     let instance: MapLibreMap;
     try {
       instance = new MapLibreMap({
         container,
-        style: basemapStyle(darkQuery.matches),
+        style: basemapStyle(styledDark),
         center: [camera.center.lng, camera.center.lat],
         zoom: camera.zoom,
-        minZoom: camera.minZoom,
-        maxBounds: camera.bounds,
         fadeDuration: 0,
         attributionControl: false,
       });
@@ -69,8 +70,13 @@ export default function MapCanvas(props: {
       return;
     }
 
-    const resizer = new ResizeObserver(() => instance.resize()); // a 0x0 container leaves a blank canvas
+    // a 0x0 container leaves a blank canvas
+    const resizer = new ResizeObserver(() => {
+      instance.resize();
+      fitCountry(instance, camera.bounds);
+    });
     resizer.observe(container);
+    fitCountry(instance, camera.bounds);
 
     instance.on('error', (e) => {
       setError(e.error?.message ?? 'No se pudo cargar el mapa');
@@ -78,9 +84,11 @@ export default function MapCanvas(props: {
     });
 
     const addLayers = () => {
+      stopsLayer.bakeImages(instance);
       if (instance.getSource('stops')) return;
+      terminalsLayer.addSource(instance);
       routeLayer.addSource(instance);
-      stopsLayer.addImages(instance);
+      terminalsLayer.addLayers(instance);
       stopsLayer.add(instance, 'stops');
       routeLayer.addLayers(instance, props.routeCompany);
       stopsLayer.add(instance, 'route-stops');
@@ -104,8 +112,13 @@ export default function MapCanvas(props: {
     });
     instance.on('moveend', onView);
 
-    for (const layer of stopsLayer.HITS) {
+    const hits = [...stopsLayer.HITS, terminalsLayer.HIT];
+    for (const layer of hits) {
       instance.on('click', layer, (e) => {
+        // stop inside the terminal takes the tap
+        if (layer === terminalsLayer.HIT && instance.queryRenderedFeatures(e.point, {layers: stopsLayer.HITS}).length) {
+          return;
+        }
         const p = e.features?.[0]?.properties;
         if (p?.stop_id) props.onSelectStop?.(String(p.stop_id), p.stop_name && String(p.stop_name));
       });
@@ -113,28 +126,34 @@ export default function MapCanvas(props: {
       instance.on('mouseleave', layer, () => (instance.getCanvas().style.cursor = ''));
     }
     instance.on('click', (e) => {
-      if (instance.queryRenderedFeatures(e.point, {layers: stopsLayer.HITS}).length === 0) props.onBackground?.();
+      if (instance.queryRenderedFeatures(e.point, {layers: hits}).length === 0) props.onBackground?.();
     });
 
     // setStyle drops custom layers
-    const onScheme = (e: MediaQueryListEvent) => {
-      instance.setStyle(basemapStyle(e.matches));
-      instance.once('idle', () => {
-        addLayers();
-        setMap(undefined);
-        setMap(instance);
-      });
-    };
-    darkQuery.addEventListener('change', onScheme);
+    createEffect(
+      on(
+        () => theme.dark,
+        (dark) => {
+          if (dark === styledDark) return;
+          styledDark = dark;
+          instance.setStyle(basemapStyle(dark));
+          instance.once('idle', () => {
+            addLayers();
+            setMap(undefined);
+            setMap(instance);
+          });
+        },
+        {defer: true}
+      )
+    );
 
     const buses = new BusLayer(instance, (bus) => props.onSelectBus?.(bus));
     /* eslint-enable solid/reactivity */
-    createEffect(() => map() && buses.render(props.buses, props.followBusId, props.shape));
+    createEffect(() => map() && buses.render(props.buses, props.selectedBusId, props.shape));
 
     onCleanup(() => {
       buses.destroy();
       resizer.disconnect();
-      darkQuery.removeEventListener('change', onScheme);
       instance.remove();
     });
   });
@@ -154,14 +173,24 @@ export default function MapCanvas(props: {
     if (!m) return;
     const shape = props.shape;
     const onRoute = new Set(shape?.stops.map((s) => s.cluster) ?? []);
+    const footprints = new Map(stops.all.flatMap((s) => (s.footprint ? [[s.id, s.footprint] as const] : [])));
     const route: StopItem[] = shape
-      ? shape.stops.map((s) => ({id: s.stop_id, name: s.stop_name, lat: s.lat, lng: s.lng}))
+      ? shape.stops.map((s) => ({
+          id: s.stop_id,
+          name: s.stop_name,
+          lat: s.lat,
+          lng: s.lng,
+          station: s.station,
+          platform: s.platform,
+          footprint: footprints.get(s.cluster),
+        }))
       : [];
     const rest = tooWide() ? [] : stops.all.filter((s) => !onRoute.has(s.id));
     const marks = {selectedId: props.selectedStopId, siblings: props.selectedSiblings};
 
     stopsLayer.set(m, 'route-stops', route, {...marks, dim: false});
     stopsLayer.set(m, 'stops', rest, {...marks, dim: onRoute.size > 0});
+    terminalsLayer.set(m, tooWide() ? [] : stops.all, {...marks, dim: onRoute.size > 0});
   });
 
   // pans in without zooming out

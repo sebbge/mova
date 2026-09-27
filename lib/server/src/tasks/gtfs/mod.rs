@@ -120,11 +120,16 @@ async fn run_once(state: &crate::State) {
     merge_physical_stops(state).await;
   }
 
+  // every time, outlines come from migrations
+  assign_terminals(state).await;
   warm_stop_lists(state).await;
 }
 
 /// Same shelter across providers (m)
 const SAME_STOP_M: f64 = 31.0;
+
+/// Max stop to terminal outline distance (m)
+const TERMINAL_REACH_M: f64 = 50.0;
 
 /// Groups stops of one point, the leader keeps name and id
 async fn merge_physical_stops(state: &crate::State) {
@@ -143,6 +148,15 @@ async fn merge_physical_stops(state: &crate::State) {
 
 /// Search radius for the real stop of a zone schedule (m)
 const ZONAL_REACH_M: f64 = 80.0;
+
+async fn assign_terminals(state: &crate::State) {
+  use crate::domain::entities::stop::Stop;
+
+  match Stop::rebuild_terminals(&state.tasks_db, TERMINAL_REACH_M).await {
+    Ok(n) => tracing::info!(terminals = n, radius_m = TERMINAL_REACH_M, "[stops] terminal footprints assigned"),
+    Err(e) => tracing::warn!(error = ?e, "[stops] couldn't assign terminal footprints"),
+  }
+}
 
 /// Stop list precompressed ahead of the first visit
 async fn warm_stop_lists(state: &crate::State) {

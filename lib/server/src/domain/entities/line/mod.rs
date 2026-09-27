@@ -44,4 +44,8 @@ pub struct RouteStop {
   pub lat: f64,
   pub lng: f64,
   pub bearing_rad: Option<f64>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub station: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub platform: Option<String>,
 }

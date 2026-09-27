@@ -18,6 +18,13 @@ const {title, description, canonical, noindex} = Astro.props;
     <meta name='viewport' content='width=device-width, initial-scale=1' />
     <meta name='theme-color' content='#00b360' />
     <link rel='icon' href='/favicon.svg' />
+    <script is:inline>
+      try {
+        var theme = localStorage.getItem('bondi-theme');
+      } catch (e) {}
+      document.documentElement.dataset.theme =
+        theme || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    </script>
     <title>{title}</title>
     {description && <meta name='description' content={description} />}
     {canonical && <link rel='canonical' href={canonical} />}

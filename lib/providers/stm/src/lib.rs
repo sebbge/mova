@@ -1,4 +1,4 @@
-use citymob_core as core;
+use citymob_nexus_core as core;
 use core::provider::prelude::*;
 
 mod api;

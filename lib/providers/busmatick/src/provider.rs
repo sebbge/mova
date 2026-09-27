@@ -15,8 +15,15 @@ pub struct Busmatick {
 }
 impl Busmatick {
   pub fn new(id: &str, company: &'static str, config: &BusmatickConfig) -> Result<Self> {
-    let http = http::client(Duration::from_secs(15))?;
-    Ok(Self { http, base: config.base.clone(), company, tag: format!("[{id}/avl]") })
+    Ok(Self::with(http::client(Duration::from_secs(15))?, id, company, config))
+  }
+
+  pub fn legacy_tls(id: &str, company: &'static str, config: &BusmatickConfig) -> Result<Self> {
+    Ok(Self::with(http::legacy_tls_client(Duration::from_secs(15))?, id, company, config))
+  }
+
+  fn with(http: reqwest::Client, id: &str, company: &'static str, config: &BusmatickConfig) -> Self {
+    Self { http, base: config.base.clone(), company, tag: format!("[{id}/avl]") }
   }
 
   async fn markers(&self) -> Result<Vec<Marker>> {

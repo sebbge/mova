@@ -1,43 +1,189 @@
 :root {
-  --company-cutcsa: #3798a7;
-  --company-cutcsa-header: color-mix(in srgb, var(--company-cutcsa) 24%, #0b0d10);
-  --company-cutcsa-list: color-mix(in srgb, var(--company-cutcsa) 9%, #0b0d10);
+  /* mvd */
+  --company-cutcsa: oklch(0.67 0.09 200);
+  --company-cutcsa-header: color-mix(in srgb, var(--company-cutcsa) var(--tint-header-mix), var(--tint-header-base));
+  --company-cutcsa-list: color-mix(in srgb, var(--company-cutcsa) var(--tint-list-mix), var(--tint-list-base));
   --company-cutcsa-outline: hsl(from var(--company-cutcsa) h calc(s * 0.85) calc(l + 18));
 
-  --company-come: #318634;
-  --company-come-header: color-mix(in srgb, var(--company-come) 24%, #0b0d10);
-  --company-come-list: color-mix(in srgb, var(--company-come) 9%, #0b0d10);
+  --company-come: oklch(0.57 0.14 140);
+  --company-come-header: color-mix(in srgb, var(--company-come) var(--tint-header-mix), var(--tint-header-base));
+  --company-come-list: color-mix(in srgb, var(--company-come) var(--tint-list-mix), var(--tint-list-base));
   --company-come-outline: hsl(from var(--company-come) h calc(s * 0.85) calc(l + 18));
 
-  --company-ucot: #d4bc3f;
-  --company-ucot-header: color-mix(in srgb, var(--company-ucot) 24%, #0b0d10);
-  --company-ucot-list: color-mix(in srgb, var(--company-ucot) 9%, #0b0d10);
+  --company-ucot: oklch(0.78 0.15 90);
+  --company-ucot-header: color-mix(in srgb, var(--company-ucot) var(--tint-header-mix), var(--tint-header-base));
+  --company-ucot-list: color-mix(in srgb, var(--company-ucot) var(--tint-list-mix), var(--tint-list-base));
   --company-ucot-outline: hsl(from var(--company-ucot) h calc(s * 0.85) calc(l + 18));
 
-  --company-coetc: #901b1b;
-  --company-coetc-header: color-mix(in srgb, var(--company-coetc) 24%, #0b0d10);
-  --company-coetc-list: color-mix(in srgb, var(--company-coetc) 9%, #0b0d10);
+  --company-coetc: oklch(0.4264 0.1525 26.63);
+  --company-coetc-header: color-mix(in srgb, var(--company-coetc) var(--tint-header-mix), var(--tint-header-base));
+  --company-coetc-list: color-mix(in srgb, var(--company-coetc) var(--tint-list-mix), var(--tint-list-base));
   --company-coetc-outline: hsl(from var(--company-coetc) h calc(s * 0.85) calc(l + 18));
 
-  --company-codesa: #e02b2b;
-  --company-codesa-header: color-mix(in srgb, var(--company-codesa) 24%, #0b0d10);
-  --company-codesa-list: color-mix(in srgb, var(--company-codesa) 9%, #0b0d10);
+  /* mdn */
+  --company-codesa: oklch(0.5879 0.2152 27.01);
+  --company-codesa-header: color-mix(in srgb, var(--company-codesa) var(--tint-header-mix), var(--tint-header-base));
+  --company-codesa-list: color-mix(in srgb, var(--company-codesa) var(--tint-list-mix), var(--tint-list-base));
   --company-codesa-outline: hsl(from var(--company-codesa) h calc(s * 0.85) calc(l + 18));
 
-  --company-mdoturismo: #6ebd39;
-  --company-mdoturismo-header: color-mix(in srgb, var(--company-mdoturismo) 24%, #0b0d10);
-  --company-mdoturismo-list: color-mix(in srgb, var(--company-mdoturismo) 9%, #0b0d10);
+  --company-mdoturismo: oklch(0.7212 0.1821 135.37);
+  --company-mdoturismo-header: color-mix(
+    in srgb,
+    var(--company-mdoturismo) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-mdoturismo-list: color-mix(in srgb, var(--company-mdoturismo) var(--tint-list-mix), var(--tint-list-base));
   --company-mdoturismo-outline: hsl(from var(--company-mdoturismo) h calc(s * 0.85) calc(l + 18));
 
-  --company-micro: #d89f67;
-  --company-micro-header: color-mix(in srgb, var(--company-micro) 24%, #0b0d10);
-  --company-micro-list: color-mix(in srgb, var(--company-micro) 9%, #0b0d10);
+  --company-micro: oklch(0.7446 0.0994 64.79);
+  --company-micro-header: color-mix(in srgb, var(--company-micro) var(--tint-header-mix), var(--tint-header-base));
+  --company-micro-list: color-mix(in srgb, var(--company-micro) var(--tint-list-mix), var(--tint-list-base));
   --company-micro-outline: hsl(from var(--company-micro) h calc(s * 0.85) calc(l + 18));
 
-  --company-solantigua: #c44225;
-  --company-solantigua-header: color-mix(in srgb, var(--company-solantigua) 24%, #0b0d10);
-  --company-solantigua-list: color-mix(in srgb, var(--company-solantigua) 9%, #0b0d10);
+  --company-solantigua: oklch(0.5595 0.1712 34.01);
+  --company-solantigua-header: color-mix(
+    in srgb,
+    var(--company-solantigua) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-solantigua-list: color-mix(in srgb, var(--company-solantigua) var(--tint-list-mix), var(--tint-list-base));
   --company-solantigua-outline: hsl(from var(--company-solantigua) h calc(s * 0.85) calc(l + 18));
 
-  --company-unknown: #8a8f98;
+  /* uy */
+  --company-cita: oklch(0.8 0.17 84);
+  --company-cita-header: color-mix(in srgb, var(--company-cita) var(--tint-header-mix), var(--tint-header-base));
+  --company-cita-list: color-mix(in srgb, var(--company-cita) var(--tint-list-mix), var(--tint-list-base));
+  --company-cita-outline: hsl(from var(--company-cita) h calc(s * 0.85) calc(l + 18));
+
+  --company-copsa: oklch(0.5848 0.2211 29.16);
+  --company-copsa-header: color-mix(in srgb, var(--company-copsa) var(--tint-header-mix), var(--tint-header-base));
+  --company-copsa-list: color-mix(in srgb, var(--company-copsa) var(--tint-list-mix), var(--tint-list-base));
+  --company-copsa-outline: hsl(from var(--company-copsa) h calc(s * 0.85) calc(l + 18));
+
+  --company-rutasdelplata: oklch(0.3384 0.0981 292.26);
+  --company-rutasdelplata-header: color-mix(
+    in srgb,
+    var(--company-rutasdelplata) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-rutasdelplata-list: color-mix(
+    in srgb,
+    var(--company-rutasdelplata) var(--tint-list-mix),
+    var(--tint-list-base)
+  );
+  --company-rutasdelplata-outline: hsl(from var(--company-rutasdelplata) h calc(s * 0.85) calc(l + 18));
+
+  --company-cot: oklch(0.648 0.2042 37.14);
+  --company-cot-header: color-mix(in srgb, var(--company-cot) var(--tint-header-mix), var(--tint-header-base));
+  --company-cot-list: color-mix(in srgb, var(--company-cot) var(--tint-list-mix), var(--tint-list-base));
+  --company-cot-outline: hsl(from var(--company-cot) h calc(s * 0.85) calc(l + 18));
+
+  --company-turismar: oklch(0.5899 0.1095 260.18);
+  --company-turismar-header: color-mix(
+    in srgb,
+    var(--company-turismar) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-turismar-list: color-mix(in srgb, var(--company-turismar) var(--tint-list-mix), var(--tint-list-base));
+  --company-turismar-outline: hsl(from var(--company-turismar) h calc(s * 0.85) calc(l + 18));
+
+  --company-casanova: oklch(0.6412 0.1522 247.13);
+  --company-casanova-header: color-mix(
+    in srgb,
+    var(--company-casanova) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-casanova-list: color-mix(in srgb, var(--company-casanova) var(--tint-list-mix), var(--tint-list-base));
+  --company-casanova-outline: hsl(from var(--company-casanova) h calc(s * 0.85) calc(l + 18));
+
+  --company-tpm: oklch(0.4143 0.1379 256.12);
+  --company-tpm-header: color-mix(in srgb, var(--company-tpm) var(--tint-header-mix), var(--tint-header-base));
+  --company-tpm-list: color-mix(in srgb, var(--company-tpm) var(--tint-list-mix), var(--tint-list-base));
+  --company-tpm-outline: hsl(from var(--company-tpm) h calc(s * 0.85) calc(l + 18));
+
+  --company-nunez: oklch(0.5794 0.1668 147.27);
+  --company-nunez-header: color-mix(in srgb, var(--company-nunez) var(--tint-header-mix), var(--tint-header-base));
+  --company-nunez-list: color-mix(in srgb, var(--company-nunez) var(--tint-list-mix), var(--tint-list-base));
+  --company-nunez-outline: hsl(from var(--company-nunez) h calc(s * 0.85) calc(l + 18));
+
+  --company-agenciacentral: oklch(0.5959 0.134 156.65);
+  --company-agenciacentral-header: color-mix(
+    in srgb,
+    var(--company-agenciacentral) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-agenciacentral-list: color-mix(
+    in srgb,
+    var(--company-agenciacentral) var(--tint-list-mix),
+    var(--tint-list-base)
+  );
+  --company-agenciacentral-outline: hsl(from var(--company-agenciacentral) h calc(s * 0.85) calc(l + 18));
+
+  --company-chadre: oklch(0.6011 0.1657 21.82);
+  --company-chadre-header: color-mix(in srgb, var(--company-chadre) var(--tint-header-mix), var(--tint-header-base));
+  --company-chadre-list: color-mix(in srgb, var(--company-chadre) var(--tint-list-mix), var(--tint-list-base));
+  --company-chadre-outline: hsl(from var(--company-chadre) h calc(s * 0.85) calc(l + 18));
+
+  --company-sabelin: oklch(0.3879 0.1433 274.57);
+  --company-sabelin-header: color-mix(in srgb, var(--company-sabelin) var(--tint-header-mix), var(--tint-header-base));
+  --company-sabelin-list: color-mix(in srgb, var(--company-sabelin) var(--tint-list-mix), var(--tint-list-base));
+  --company-sabelin-outline: hsl(from var(--company-sabelin) h calc(s * 0.85) calc(l + 18));
+
+  --company-ega: oklch(0.6463 0.1748 48.45);
+  --company-ega-header: color-mix(in srgb, var(--company-ega) var(--tint-header-mix), var(--tint-header-base));
+  --company-ega-list: color-mix(in srgb, var(--company-ega) var(--tint-list-mix), var(--tint-list-base));
+  --company-ega-outline: hsl(from var(--company-ega) h calc(s * 0.85) calc(l + 18));
+
+  --company-nossar: oklch(0.5197 0.1438 141.1);
+  --company-nossar-header: color-mix(in srgb, var(--company-nossar) var(--tint-header-mix), var(--tint-header-base));
+  --company-nossar-list: color-mix(in srgb, var(--company-nossar) var(--tint-list-mix), var(--tint-list-base));
+  --company-nossar-outline: hsl(from var(--company-nossar) h calc(s * 0.85) calc(l + 18));
+
+  --company-copay: oklch(0.6086 0.2399 28.26);
+  --company-copay-header: color-mix(in srgb, var(--company-copay) var(--tint-header-mix), var(--tint-header-base));
+  --company-copay-list: color-mix(in srgb, var(--company-copay) var(--tint-list-mix), var(--tint-list-base));
+  --company-copay-outline: hsl(from var(--company-copay) h calc(s * 0.85) calc(l + 18));
+
+  --company-rutasdelsol: oklch(0.415 0.1074 246.31);
+  --company-rutasdelsol-header: color-mix(
+    in srgb,
+    var(--company-rutasdelsol) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-rutasdelsol-list: color-mix(
+    in srgb,
+    var(--company-rutasdelsol) var(--tint-list-mix),
+    var(--tint-list-base)
+  );
+  --company-rutasdelsol-outline: hsl(from var(--company-rutasdelsol) h calc(s * 0.85) calc(l + 18));
+
+  --company-tureste: oklch(0.7786 0.17 68.51);
+  --company-tureste-header: color-mix(in srgb, var(--company-tureste) var(--tint-header-mix), var(--tint-header-base));
+  --company-tureste-list: color-mix(in srgb, var(--company-tureste) var(--tint-list-mix), var(--tint-list-base));
+  --company-tureste-outline: hsl(from var(--company-tureste) h calc(s * 0.85) calc(l + 18));
+
+  --company-turil: oklch(0.2975 0.1189 259.61);
+  --company-turil-header: color-mix(in srgb, var(--company-turil) var(--tint-header-mix), var(--tint-header-base));
+  --company-turil-list: color-mix(in srgb, var(--company-turil) var(--tint-list-mix), var(--tint-list-base));
+  --company-turil-outline: hsl(from var(--company-turil) h calc(s * 0.85) calc(l + 18));
+
+  --company-elnorteno: oklch(0.6165 0.1824 40.21);
+  --company-elnorteno-header: color-mix(
+    in srgb,
+    var(--company-elnorteno) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-elnorteno-list: color-mix(in srgb, var(--company-elnorteno) var(--tint-list-mix), var(--tint-list-base));
+  --company-elnorteno-outline: hsl(from var(--company-elnorteno) h calc(s * 0.85) calc(l + 18));
+
+  --company-buquebus: oklch(0.6098 0.1229 231.12);
+  --company-buquebus-header: color-mix(
+    in srgb,
+    var(--company-buquebus) var(--tint-header-mix),
+    var(--tint-header-base)
+  );
+  --company-buquebus-list: color-mix(in srgb, var(--company-buquebus) var(--tint-list-mix), var(--tint-list-base));
+  --company-buquebus-outline: hsl(from var(--company-buquebus) h calc(s * 0.85) calc(l + 18));
+
+  --company-unknown: oklch(0.6488 0.0146 262.36);
 }

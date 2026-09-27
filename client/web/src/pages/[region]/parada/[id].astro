@@ -2,12 +2,12 @@
 import {PUBLIC_SITE_URL} from 'astro:env/client';
 import Base from '~/layouts/Base.astro';
 import {api} from '~/lib/api/client';
-import {orderedRefs, placeKicker, providerInfo, providerOf, serviceOf} from '~/lib/domain/providers';
+import {isTerminalStop, orderedRefs, providerInfo, providerOf, serviceOf, stopKicker} from '~/lib/domain/providers';
 import type {Region} from '~/lib/domain/regions';
-import {rawId} from '~/lib/format';
+import {fullStopName, rawId} from '~/lib/format';
 import LineBadge from '~/lib/line/LineBadge';
 import Arrivals from '~/lib/stop/Arrivals';
-import Header from '~/lib/ui/Header';
+import Header from '~/lib/ui/Header.astro';
 import {href} from '~/lib/ui/href';
 import SourceCredit from '~/lib/ui/SourceCredit';
 import {stopPaths} from '../../_paths';
@@ -21,22 +21,23 @@ const number = rawId(stop.siblings[0] ?? stop.stop_id);
 const siblings = orderedRefs(stop.siblings);
 const service = serviceOf(stop.stop_id);
 const only = providerInfo(providerOf(stop.stop_id)).only;
-const kicker = placeKicker(stop.stop_id, name);
-const label = kicker ? name : `Parada N° ${number} · ${name}`;
-const place = kicker ? name : `la parada ${number}, ${name}`;
+const place = fullStopName(name, stop.station);
+const kicker = stopKicker(stop.stop_id, name, number, stop.station);
+const numbered = service !== 'inter' && !isTerminalStop(name, stop.station);
+const label = stop.station ? place : numbered ? `${kicker} · ${name}` : name;
 const lineList = stop.lines
   .map((l) => l.line)
   .slice(0, 8)
   .join(', ');
 
 const description = stop.lines.length
-  ? `Horarios y llegadas en ${place}. Líneas ${lineList}.`
-  : `${kicker ? name : `Parada ${number}, ${name}`}, en ${region.name}.`;
+  ? `Horarios y llegadas en ${numbered ? `la parada ${number}, ${name}` : place}. Líneas ${lineList}.`
+  : `${numbered ? `Parada ${number}, ${name}` : place}, en ${region.name}.`;
 
 const jsonLd = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'BusStop',
-  name,
+  name: place,
   identifier: number,
   address: {'@type': 'PostalAddress', addressLocality: region.name, addressCountry: 'UY'},
   geo: {'@type': 'GeoCoordinates', latitude: stop.lat, longitude: stop.lng},
@@ -52,7 +53,7 @@ const jsonLd = JSON.stringify({
 
   <main>
     <div class:list={['head', service]}>
-      <span class='kicker'>{kicker ?? `Parada ${number}`}</span>
+      <span class='kicker'>{kicker}</span>
       <h1>{name}</h1>
 
       {siblings.length > 1 ? (
@@ -112,15 +113,15 @@ const jsonLd = JSON.stringify({
     gap: var(--space-1);
 
     &.suburban {
-      --service: var(--service-suburban-header);
+      --service: var(--service-suburban);
     }
 
     &.inter {
-      --service: var(--service-inter-header);
+      --service: var(--service-inter);
     }
 
     &.neutral {
-      --service: var(--service-neutral-header);
+      --service: var(--service-neutral);
     }
   }
 

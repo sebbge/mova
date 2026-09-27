@@ -5,9 +5,9 @@ import {api} from '~/lib/api/client';
 import type {RouteShape} from '~/lib/api/types';
 import type {Region} from '~/lib/domain/regions';
 import LineBadge from '~/lib/line/LineBadge';
-import Header from '~/lib/ui/Header';
+import Header from '~/lib/ui/Header.astro';
 import {providerOf} from '~/lib/domain/providers';
-import {rawId} from '~/lib/format';
+import {fullStopName, rawId} from '~/lib/format';
 import {href} from '~/lib/ui/href';
 import SourceCredit from '~/lib/ui/SourceCredit';
 import {linePaths} from '../../_paths';
@@ -82,7 +82,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
                 <li>
                   <a href={href.stop(region.slug, stop.stop_id)}>
                     <span class='id'>{rawId(stop.stop_id)}</span>
-                    <span class='name'>{stop.stop_name}</span>
+                    <span class='name'>{fullStopName(stop.stop_name, stop.station)}</span>
                   </a>
                 </li>
               ))}

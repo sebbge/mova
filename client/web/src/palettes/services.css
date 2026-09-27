@@ -1,31 +1,107 @@
 :root {
-  --service-urban: #2d487f;
-  --service-suburban: #2f7a63;
-  --service-inter: #bc6b23;
-  --service-neutral: #566682;
+  --tint-header-s: 0.85;
+  --tint-header-l: 38%;
+  --tint-list-s: 0.35;
+  --tint-list-l: 96%;
+  --tint-header-base: oklch(0.22 0.14 90);
+  --tint-list-base: oklch(1 0 0);
+  --tint-header-mix: 70%;
+  --tint-list-mix: 6%;
+  --tint-pin-l: 0.08;
 
-  --service-urban-header: hsl(from var(--service-urban) h calc(s * 0.75) 19%);
-  --service-urban-list: hsl(from var(--service-urban) h calc(s * 0.4) 10%);
+  --service-header-on: oklch(1 0 0);
+  --service-header-on-muted: oklch(0.87 0.026 268.82);
+  --skeleton-on-header: oklch(1 0 0 / 0.18);
+  --skeleton-on-header-sheen: oklch(1 0 0 / 0.34);
+
+  --service-on: oklch(0.3309 0.0087 285.91);
+  --service-on-muted: oklch(0.4089 0.0123 267.22);
+  --service-divider: oklch(0 0 0 / 0.08);
+  --service-hover: oklch(0 0 0 / 0.04);
+
+  --skeleton-on-tint: oklch(0 0 0 / 0.08);
+  --skeleton-on-tint-sheen: oklch(0 0 0 / 0.03);
+  --scrollbar-on-tint: oklch(0 0 0 / 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --tint-header-s: 0.75;
+    --tint-header-l: 19%;
+    --tint-list-s: 0.4;
+    --tint-list-l: 10%;
+    --tint-header-base: oklch(0.1582 0.0072 258.37);
+    --tint-list-base: oklch(0.1582 0.0072 258.37);
+    --tint-header-mix: 24%;
+    --tint-list-mix: 9%;
+    --tint-pin-l: 0;
+
+    --service-header-on: oklch(1 0 0);
+    --service-header-on-muted: oklch(0.7492 0.0234 263.16);
+    --skeleton-on-header: oklch(1 0 0 / 0.18);
+    --skeleton-on-header-sheen: oklch(1 0 0 / 0.34);
+
+    --service-on: oklch(1 0 0);
+    --service-on-muted: oklch(0.7492 0.0234 263.16);
+    --service-divider: oklch(1 0 0 / 0.07);
+    --service-hover: oklch(1 0 0 / 0.05);
+
+    --skeleton-on-tint: oklch(1 0 0 / 0.18);
+    --skeleton-on-tint-sheen: oklch(1 0 0 / 0.34);
+    --scrollbar-on-tint: oklch(1 0 0 / 0.2);
+  }
+}
+
+:root[data-theme='dark'] {
+  --tint-header-s: 0.75;
+  --tint-header-l: 19%;
+  --tint-list-s: 0.4;
+  --tint-list-l: 10%;
+  --tint-header-base: oklch(0.1582 0.0072 258.37);
+  --tint-list-base: oklch(0.1582 0.0072 258.37);
+  --tint-header-mix: 24%;
+  --tint-list-mix: 9%;
+  --tint-pin-l: 0;
+
+  --service-header-on: oklch(1 0 0);
+  --service-header-on-muted: oklch(0.7492 0.0234 263.16);
+  --skeleton-on-header: oklch(1 0 0 / 0.18);
+  --skeleton-on-header-sheen: oklch(1 0 0 / 0.34);
+
+  --service-on: oklch(1 0 0);
+  --service-on-muted: oklch(0.7492 0.0234 263.16);
+  --service-divider: oklch(1 0 0 / 0.07);
+  --service-hover: oklch(1 0 0 / 0.05);
+
+  --skeleton-on-tint: oklch(1 0 0 / 0.18);
+  --skeleton-on-tint-sheen: oklch(1 0 0 / 0.34);
+  --scrollbar-on-tint: oklch(1 0 0 / 0.2);
+}
+
+:root {
+  --service-urban: oklch(0.4094 0.0982 263.05);
+  --service-suburban: oklch(0.5259 0.083 169.79);
+  --service-inter: oklch(0.6075 0.1315 57.11);
+  --service-neutral: oklch(0.508 0.0489 261.49);
+
+  --service-urban-header: hsl(from var(--service-urban) h calc(s * var(--tint-header-s)) var(--tint-header-l));
+  --service-urban-list: hsl(from var(--service-urban) h calc(s * var(--tint-list-s)) var(--tint-list-l));
   --service-urban-outline: hsl(from var(--service-urban) h calc(s * 0.85) 50%);
 
-  --service-suburban-header: hsl(from var(--service-suburban) h calc(s * 0.75) 19%);
-  --service-suburban-list: hsl(from var(--service-suburban) h calc(s * 0.4) 10%);
+  --service-suburban-header: hsl(from var(--service-suburban) h calc(s * var(--tint-header-s)) var(--tint-header-l));
+  --service-suburban-list: hsl(from var(--service-suburban) h calc(s * var(--tint-list-s)) var(--tint-list-l));
   --service-suburban-outline: hsl(from var(--service-suburban) h calc(s * 0.85) 50%);
 
-  --service-inter-header: hsl(from var(--service-inter) h calc(s * 0.75) 19%);
-  --service-inter-list: hsl(from var(--service-inter) h calc(s * 0.4) 10%);
+  --service-inter-header: hsl(from var(--service-inter) h calc(s * var(--tint-header-s)) var(--tint-header-l));
+  --service-inter-list: hsl(from var(--service-inter) h calc(s * var(--tint-list-s)) var(--tint-list-l));
   --service-inter-outline: hsl(from var(--service-inter) h calc(s * 0.85) 50%);
 
-  --service-neutral-header: hsl(from var(--service-neutral) h calc(s * 0.75) 19%);
-  --service-neutral-list: hsl(from var(--service-neutral) h calc(s * 0.4) 10%);
+  --service-neutral-header: hsl(from var(--service-neutral) h calc(s * var(--tint-header-s)) var(--tint-header-l));
+  --service-neutral-list: hsl(from var(--service-neutral) h calc(s * var(--tint-list-s)) var(--tint-list-l));
   --service-neutral-outline: hsl(from var(--service-neutral) h calc(s * 0.85) 60%);
 
-  --service-on: #ffffff;
-  --service-on-muted: #a6aebd;
-  --service-divider: rgb(255 255 255 / 0.07);
-  --service-hover: rgb(255 255 255 / 0.05);
-
-  --skeleton-on-tint: rgb(255 255 255 / 0.18);
-  --skeleton-on-tint-sheen: rgb(255 255 255 / 0.34);
-  --scrollbar-on-tint: rgb(255 255 255 / 0.2);
+  --service-urban-pin: oklch(from var(--service-urban) calc(l + var(--tint-pin-l)) c h);
+  --service-suburban-pin: oklch(from var(--service-suburban) calc(l + var(--tint-pin-l)) c h);
+  --service-inter-pin: var(--service-inter);
+  --service-neutral-pin: var(--service-neutral);
 }

@@ -1,4 +1,8 @@
-.band,
+.band {
+  --skeleton: var(--skeleton-on-header);
+  --skeleton-sheen: var(--skeleton-on-header-sheen);
+}
+
 .list {
   --skeleton: var(--skeleton-on-tint);
   --skeleton-sheen: var(--skeleton-on-tint-sheen);
@@ -7,8 +11,8 @@
 
 .band {
   --sheet-header-bg: var(--service-urban-header);
-  --sheet-header-fg: var(--service-on);
-  --sheet-header-muted: var(--service-on-muted);
+  --sheet-header-fg: var(--service-header-on);
+  --sheet-header-muted: var(--service-header-on-muted);
   margin: 0 calc(var(--gutter) * -1);
   padding: 0 var(--gutter);
   background: var(--sheet-header-bg);
@@ -120,6 +124,25 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.company {
+  font-size: 0.725rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--service-on-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(:root[data-theme='light']) .destination {
+  font-weight: 500;
+}
+
+:global(:root[data-theme='light']) .next {
+  font-weight: 700;
 }
 
 .etas {

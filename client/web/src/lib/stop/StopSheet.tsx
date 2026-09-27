@@ -1,7 +1,7 @@
 import {For, Match, Show, Switch} from 'solid-js';
 import type {Stop, StopLine} from '~/lib/api/types';
-import {orderedRefs, placeKicker, providerInfo, providerOf, serviceOf} from '~/lib/domain/providers';
-import {arrivalLabel, arrivalTitle, rawId} from '~/lib/format';
+import {orderedRefs, providerInfo, providerOf, serviceOf, stopKicker} from '~/lib/domain/providers';
+import {arrivalLabel, arrivalTitle, rawId, splitCompanyLine} from '~/lib/format';
 import LineBadge from '~/lib/line/LineBadge';
 import MetaIcons from '~/lib/ui/icons/MetaIcons';
 import ServiceIcon from '~/lib/ui/icons/ServiceIcon';
@@ -36,7 +36,7 @@ export default function StopSheet(props: {
     <>
       <div class={`${styles.band} ${styles[service()] ?? ''}`}>
         <SheetHeader
-          kicker={placeKicker(ref(), title()) ?? `Parada N° ${rawId(props.stop?.siblings?.[0] ?? ref())}`}
+          kicker={stopKicker(ref(), title(), rawId(props.stop?.siblings?.[0] ?? ref()), props.stop?.station)}
           title={title()}
           lead={<StopIcon />}
         />
@@ -73,12 +73,21 @@ export default function StopSheet(props: {
               <For each={props.arrivals}>
                 {(line) => {
                   const first = () => line.arrivals[0];
+                  const label = () => (service() === 'inter' ? splitCompanyLine(line.line) : {line: line.line});
                   return (
                     <li>
                       <button
                         onClick={() => props.onSelectLine?.(line.line, line.destination ?? undefined, line.company)}>
-                        <LineBadge line={line.line} company={line.company} size='sm' variant='flat' />
+                        <LineBadge
+                          line={label().line}
+                          company={line.company || label().company}
+                          size='sm'
+                          variant='flat'
+                        />
                         <span class={styles.info}>
+                          <Show when={label().company}>
+                            <span class={styles.company}>{label().company}</span>
+                          </Show>
                           <span class={styles.destination}>{line.destination ?? ''}</span>
                           <MetaIcons bus={first()?.bus} />
                         </span>

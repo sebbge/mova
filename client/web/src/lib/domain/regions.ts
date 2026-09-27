@@ -113,6 +113,7 @@ export const REGIONS: readonly Region[] = [
     id: 'uy-pa',
     slug: 'pa',
     name: 'Paysandú',
+    allBuses: true,
     bounds: [
       [-58.207, -32.596],
       [-56.238, -31.452],
@@ -131,6 +132,7 @@ export const REGIONS: readonly Region[] = [
     id: 'uy-rv',
     slug: 'rv',
     name: 'Rivera',
+    allBuses: true,
     bounds: [
       [-56.185, -32.11],
       [-54.452, -30.833],
@@ -187,7 +189,6 @@ export const REGIONS: readonly Region[] = [
 export const MAP_CAMERA = {
   center: {lat: -34.9011, lng: -56.1645},
   zoom: 13,
-  minZoom: 6,
   bounds: [
     [-58.55, -35.1],
     [-53.1, -30.05],

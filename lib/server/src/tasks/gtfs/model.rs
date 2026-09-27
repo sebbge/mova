@@ -180,6 +180,8 @@ impl LocalGtfs {
 
     let mut stop_ids: Vec<String> = Vec::with_capacity(len);
     let mut stop_names: Vec<String> = Vec::with_capacity(len);
+    let mut stations: Vec<Option<String>> = Vec::with_capacity(len);
+    let mut platforms: Vec<Option<String>> = Vec::with_capacity(len);
     let mut lngs: Vec<f64> = Vec::with_capacity(len);
     let mut lats: Vec<f64> = Vec::with_capacity(len);
 
@@ -194,15 +196,27 @@ impl LocalGtfs {
 
       loaded.stops.insert(id);
       stop_ids.push(id.clone());
-      stop_names.push(stop.name.as_deref().map(|n| names.place(n)).unwrap_or_else(|| "Parada de bus".to_string()));
+      match stop.name.as_deref().and_then(|n| names.platform(n)) {
+        Some(p) => {
+          stop_names.push(p.name);
+          stations.push(Some(p.station));
+          platforms.push(Some(p.code));
+        }
+        None => {
+          stop_names.push(stop.name.as_deref().map(|n| names.place(n)).unwrap_or_else(|| "Parada de bus".to_string()));
+          stations.push(None);
+          platforms.push(None);
+        }
+      }
       lngs.push(lng);
       lats.push(lat);
     }
 
     let q = r#"
-      INSERT INTO stops (region, provider, stop_id, stop_name, geom, area)
-      SELECT $5, $6, t.stop_id, t.stop_name, p.g::geography, a.code
-      FROM UNNEST($1::text[], $2::text[], $3::float8[], $4::float8[]) AS t(stop_id, stop_name, lng, lat)
+      INSERT INTO stops (region, provider, stop_id, stop_name, geom, area, station, platform)
+      SELECT $5, $6, t.stop_id, t.stop_name, p.g::geography, a.code, t.station, t.platform
+      FROM UNNEST($1::text[], $2::text[], $3::float8[], $4::float8[], $7::text[], $8::text[])
+        AS t(stop_id, stop_name, lng, lat, station, platform)
       CROSS JOIN LATERAL (SELECT ST_SetSRID(ST_MakePoint(t.lng, t.lat), 4326) AS g) p
       LEFT JOIN LATERAL (SELECT code FROM area_parts WHERE ST_Intersects(geom, p.g) LIMIT 1) a ON true
       "#;
@@ -213,6 +227,8 @@ impl LocalGtfs {
       .bind(&lats)
       .bind(region)
       .bind(provider)
+      .bind(&stations)
+      .bind(&platforms)
       .execute(tx.as_mut())
       .await?;
     Ok(())

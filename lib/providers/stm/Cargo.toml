@@ -1,12 +1,13 @@
 [package]
-name = "citymob-stm"
+name = "citymob-provider-stm"
+authors.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-citymob-core.workspace = true
+citymob-nexus-core.workspace = true
 
 async-trait.workspace = true
 chrono.workspace = true

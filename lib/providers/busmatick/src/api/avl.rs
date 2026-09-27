@@ -19,7 +19,7 @@ pub struct Marker {
   delay: Option<i64>,
   accessible: bool,
   electric: bool,
-  timestamp: DateTime<Utc>,
+  timestamp: Option<DateTime<Utc>>,
   current_stop: Option<StopRef>,
   next_stop: Option<StopRef>,
 }
@@ -46,13 +46,16 @@ impl Marker {
     let field = |name: &str| field(block, name);
 
     let (lat, lng): (f64, f64) = (field("lat")?.parse().ok()?, field("lon")?.parse().ok()?);
-    let (bus, line) = (field("bus")?, field("lin")?);
+    let (bus, line) = (field("bus").filter(|b| !b.is_empty()).or(field("id"))?, field("lin")?);
     if lat == 0.0 || lng == 0.0 || bus.is_empty() || line.is_empty() || line == "0" {
       return None;
     }
 
-    let timestamp = timestamp(field("fec")?, field("hor")?)?;
-    if timestamp < now - STALE || timestamp > now + AHEAD {
+    let timestamp = match (field("fec"), field("hor")) {
+      (Some(date), Some(time)) => Some(timestamp(date, time)?),
+      _ => None,
+    };
+    if timestamp.is_some_and(|t| t < now - STALE || t > now + AHEAD) {
       return None;
     }
 
@@ -94,7 +97,7 @@ impl Marker {
       speed: m.speed,
       origin: None,
       destination: m.headsign.as_deref().map(crate::names::destination),
-      timestamp: Some(m.timestamp),
+      timestamp: m.timestamp,
       delay_min: m.delay,
       stop: m.current_stop,
       next_stop: m.next_stop,

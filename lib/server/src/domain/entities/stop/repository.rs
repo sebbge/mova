@@ -149,6 +149,17 @@ impl StopLine {
     lines.truncate(20);
     Ok(lines.into_iter().map(|l| (l.line.clone(), l)).collect())
   }
+
+  /// Lines without any shape
+  pub async fn shapeless(db: &crate::Db, scope: &Scope, lines: &[String]) -> crate::Result<Vec<String>> {
+    let q = r#"
+    SELECT DISTINCT r.route_short_name FROM routes r
+    WHERE r.region = $1 AND r.provider = $2 AND r.route_short_name = ANY($3)
+      AND NOT EXISTS (SELECT 1 FROM trips t WHERE t.region = r.region AND t.provider = r.provider
+                      AND t.route_id = r.route_id AND t.shape_id IS NOT NULL)
+    "#;
+    Ok(sqlx::query_scalar(q).bind(&scope.region).bind(&scope.provider).bind(lines).fetch_all(db).await?)
+  }
 }
 
 //- sql
@@ -292,17 +303,17 @@ impl Stop {
     // roster lines, no destination
     let q = r#"
     WITH here AS MATERIALIZED (
-      SELECT st.* FROM stop_times st
+      SELECT t.region, t.provider, t.route_id, t.trip_headsign FROM stop_times st
+      JOIN trips t ON t.region = st.region AND t.provider = st.provider AND t.trip_id = st.trip_id
       WHERE st.region = $2 AND st.provider = $3 AND st.stop_id = $1
         AND EXISTS (SELECT 1 FROM stop_times nx WHERE nx.region = st.region AND nx.provider = st.provider
                     AND nx.trip_id = st.trip_id AND nx.stop_sequence > st.stop_sequence)
     ),
     scheduled AS (
-      SELECT r.route_short_name AS line, t.trip_headsign AS destination, COUNT(*) AS n
-      FROM here st
-      JOIN trips  t ON t.region = st.region AND t.provider = st.provider AND t.trip_id  = st.trip_id
-      JOIN routes r ON r.region = t.region  AND r.provider = t.provider AND r.route_id = t.route_id
-      GROUP BY r.route_short_name, t.trip_headsign
+      SELECT r.route_short_name AS line, a.trip_headsign AS destination, COUNT(*) AS n
+      FROM here a
+      JOIN routes r ON r.region = a.region AND r.provider = a.provider AND r.route_id = a.route_id
+      GROUP BY r.route_short_name, a.trip_headsign
     ),
     roster_only AS (
       SELECT sl.line, NULL::text AS destination, 0::bigint AS n
@@ -341,7 +352,7 @@ impl Stop {
       SELECT region, COALESCE(cluster, provider || '-' || stop_id) AS grp
       FROM stops WHERE region = $2 AND provider = $3 AND stop_id = $1
     )
-    SELECT s.provider || '-' || s.stop_id AS reference, s.stop_name
+    SELECT s.provider || '-' || s.stop_id AS reference, s.stop_name, s.station, s.platform
     FROM stops s JOIN this_stop e ON s.region = e.region
     WHERE COALESCE(s.cluster, s.provider || '-' || s.stop_id) = e.grp
     ORDER BY (s.provider || '-' || s.stop_id = e.grp) DESC, s.provider
@@ -351,18 +362,25 @@ impl Stop {
     struct SiblingRow {
       reference: String,
       stop_name: String,
+      station: Option<String>,
+      platform: Option<String>,
     }
 
     let group: Vec<SiblingRow> =
       sqlx::query_as(q).bind(stop_id).bind(&scope.region).bind(&scope.provider).fetch_all(db).await?;
 
     // shelter named after the leading stop
-    let stop_name = group.first().map(|s| s.stop_name.clone()).unwrap_or(row.stop_name);
+    let (stop_name, station, platform) = match group.first() {
+      Some(s) => (s.stop_name.clone(), s.station.clone(), s.platform.clone()),
+      None => (row.stop_name, None, None),
+    };
     let siblings: Vec<String> = group.into_iter().map(|s| s.reference).collect();
 
     Ok(Self {
       stop_id: crate::domain::scope::qualify(&scope.provider, &row.stop_id),
       stop_name,
+      station,
+      platform,
       area: row.area,
       lat: row.lat,
       lng: row.lng,
@@ -379,13 +397,25 @@ impl Stop {
     SELECT s.provider || '-' || s.stop_id AS id, s.stop_name AS name,
            round(ST_Y(s.geom::geometry)::numeric, 5)::float8 AS lat,
            round(ST_X(s.geom::geometry)::numeric, 5)::float8 AS lng,
-           g.providers
+           g.providers, s.station, s.platform, f.footprint
     FROM stops s
     LEFT JOIN LATERAL (
       SELECT array_agg(DISTINCT o.provider) AS providers
       FROM stops o
       WHERE o.region = s.region AND o.cluster = s.cluster
     ) g ON s.cluster IS NOT NULL
+    LEFT JOIN LATERAL (
+      SELECT ARRAY(
+        SELECT round(c::numeric, 5)::float8
+        FROM ST_DumpPoints(ST_ExteriorRing(t.geom)) d,
+             unnest(ARRAY[ST_X(d.geom), ST_Y(d.geom)]) WITH ORDINALITY AS u(c, i)
+        ORDER BY d.path, u.i
+      ) AS footprint
+      FROM terminals t
+      WHERE t.region = s.region AND t.provider = s.provider AND t.stop_id = s.stop_id
+      ORDER BY ST_Area(t.geom) DESC
+      LIMIT 1
+    ) f ON true
     WHERE COALESCE(s.area, s.region) = $1
       -- shared shelter: leader only
       AND (s.cluster IS NULL OR s.cluster = s.provider || '-' || s.stop_id)
@@ -396,6 +426,25 @@ impl Stop {
     ORDER BY s.stop_id
     "#;
     Ok(sqlx::query_as(q).bind(area).fetch_all(db).await?)
+  }
+
+  /// Terminal outline to its "Terminal …" or "Intercambiador …" stop nearest the center, returns the count
+  pub async fn rebuild_terminals(db: &crate::Db, reach_m: f64) -> crate::Result<u64> {
+    sqlx::query("UPDATE terminals SET region = NULL, provider = NULL, stop_id = NULL").execute(db).await?;
+
+    let q = r#"
+    UPDATE terminals t SET region = d.region, provider = d.provider, stop_id = d.stop_id
+    FROM (
+      SELECT DISTINCT ON (t.osm_id) t.osm_id, s.region, s.provider, s.stop_id
+      FROM terminals t
+      JOIN stops s ON ST_DWithin(s.geom, t.geom::geography, $1)
+      WHERE NOT s.zonal AND (s.cluster IS NULL OR s.cluster = s.provider || '-' || s.stop_id)
+      ORDER BY t.osm_id, (s.station IS NOT NULL OR s.stop_name ~* '^(terminal|intercambiador)\M') DESC,
+               ST_Distance(s.geom, ST_Centroid(t.geom)::geography)
+    ) d
+    WHERE d.osm_id = t.osm_id
+    "#;
+    Ok(sqlx::query(q).bind(reach_m).execute(db).await?.rows_affected())
   }
 
   /// Groups mutually nearest stops of different providers, returns the count

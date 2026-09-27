@@ -1,7 +1,7 @@
 import {For, Show} from 'solid-js';
 import type {Bus, BusFreshness} from '~/lib/api/types';
-import LineBadge from '~/lib/line/LineBadge';
-import {delayLabel} from '~/lib/format';
+import {delayLabel, splitCompanyLine} from '~/lib/format';
+import LineLead from '~/lib/line/LineLead';
 import {companyTint, freshnessVar} from '~/lib/ui/palette';
 import parts from '~/lib/ui/sheet/parts.module.css';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
@@ -15,6 +15,8 @@ const CONFIDENCE: Record<BusFreshness, string> = {
 
 export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
   const tint = () => companyTint(props.bus.company);
+  const split = () =>
+    props.bus.company ? splitCompanyLine(props.bus.line, props.bus.company) : {line: props.bus.line};
   const tags = () =>
     [delayLabel(props.bus.delay_min), props.bus.access, props.bus.emissions, props.bus.thermal_comfort].filter(
       (t): t is string => Boolean(t)
@@ -24,9 +26,9 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
     <>
       <div class={parts.band} style={{'--sheet-header-bg': tint().header}}>
         <SheetHeader
-          title={props.bus.destination ?? `Línea ${props.bus.line}`}
+          title={props.bus.destination ?? `Línea ${split().line}`}
           subtitle={props.bus.origin ? `desde ${props.bus.origin}` : ''}
-          lead={<LineBadge line={props.bus.line} variant='plain' />}
+          lead={<LineLead line={split().line} company={split().company} />}
         />
       </div>
 

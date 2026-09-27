@@ -1,18 +1,22 @@
 [workspace]
-members = ["lib/core", "lib/server", "lib/providers/*"]
+members = ["lib/providers/*", "lib/core", "lib/server"]
 resolver = "3"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.88"
+authors = ["citymob"]
 publish = false
 
 [workspace.dependencies]
-citymob-busmatick = { path = "lib/providers/busmatick" }
-citymob-core = { path = "lib/core" }
-citymob-dnt = { path = "lib/providers/dnt" }
-citymob-stm = { path = "lib/providers/stm" }
+# server nexus
+citymob-nexus-core = { path = "lib/core" }
+
+# providers
+citymob-provider-busmatick = { path = "lib/providers/busmatick" }
+citymob-provider-dnt = { path = "lib/providers/dnt" }
+citymob-provider-stm = { path = "lib/providers/stm" }
 
 async-trait = "0.1.92"
 axum = "0.8.9"
@@ -51,7 +55,11 @@ tokio = { version = "1.53.1", features = [
     "sync",
     "time",
 ] }
-tower-http = { version = "0.7.1", features = ["compression-gzip", "cors", "trace"] }
+tower-http = { version = "0.7.1", features = [
+    "compression-gzip",
+    "cors",
+    "trace",
+] }
 brotli = { version = "8.0", default-features = false, features = ["std"] }
 flate2 = "1.1"
 tracing = "0.1.44"

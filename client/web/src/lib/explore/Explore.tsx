@@ -25,9 +25,10 @@ export default function Explore() {
         selectedStopId={selection.stopId}
         selectedSiblings={selection.stops.refs}
         selectedStop={selection.stops.stop}
-        followBusId={selection.busId}
+        selectedBusId={selection.busId}
+        followBusId={selection.followBusId}
         onSelectStop={(id, name) => selection.openStop(id, name)}
-        onSelectBus={(bus) => selection.openBus(bus)}
+        onSelectBus={(bus) => selection.tapBus(bus)}
         onBackground={() => selection.deselectBus()}
         onView={(center, km2) => selection.onView(center, km2)}
       />

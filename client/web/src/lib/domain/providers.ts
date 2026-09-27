@@ -40,7 +40,7 @@ const PROVIDERS: Record<string, ProviderInfo> = {
   },
 };
 
-const WITHOUT_LINES = new Set(['mdoturismo', 'micro']); // live only, no lines
+const WITHOUT_LINES = new Set(['mdoturismo', 'micro', 'copay', 'microrivera']); // live only, no lines
 
 export const DEFAULT_PROVIDER = PROVIDERS.stm; // unknown -> urban
 
@@ -66,10 +66,16 @@ export function orderedRefs(refs: readonly string[]): string[] {
   return [...refs].sort((a, b) => order(a) - order(b));
 }
 
-// no public number
-export function placeKicker(ref: string, name: string): string | null {
-  if (serviceOf(ref) !== 'inter') return null;
-  return /^terminal/i.test(name) ? 'Terminal' : 'Parada';
+export function isTerminalStop(name: string, station?: string | null): boolean {
+  if (station) return true;
+  return /^(terminal|intercambiador)\b/i.test(name);
+}
+
+// terminals and inter without number
+export function stopKicker(ref: string, name: string, number: string, station?: string | null): string {
+  if (station) return station;
+  if (isTerminalStop(name)) return 'Terminal';
+  return serviceOf(ref) === 'inter' ? 'Parada' : `Parada N° ${number}`;
 }
 
 function order(ref: string): number {

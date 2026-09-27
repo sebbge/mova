@@ -1,15 +1,16 @@
 [package]
-name = "citymob"
+name = "citymob-nexus"
+authors.workspace = true
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
 [dependencies]
-citymob-busmatick.workspace = true
-citymob-core.workspace = true
-citymob-dnt.workspace = true
-citymob-stm.workspace = true
+citymob-nexus-core.workspace = true
+citymob-provider-busmatick.workspace = true
+citymob-provider-dnt.workspace = true
+citymob-provider-stm.workspace = true
 
 axum.workspace = true
 brotli.workspace = true

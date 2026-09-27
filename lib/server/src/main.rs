@@ -1,7 +1,10 @@
-use citymob_busmatick as busmatick;
-use citymob_core as core;
-use citymob_dnt as dnt;
-use citymob_stm as stm;
+use citymob_nexus_core as core;
+
+mod provider {
+  pub use citymob_provider_busmatick as busmatick;
+  pub use citymob_provider_dnt as dnt;
+  pub use citymob_provider_stm as stm;
+}
 
 mod cache;
 mod domain;
@@ -144,13 +147,17 @@ impl State {
     let cache = Cache::new(redis, sync);
 
     let providers: Vec<Arc<Provider>> = vec![
-      Arc::new(stm::provider(stm_config()).expect("stm: invalid config")),
-      Arc::new(dnt::metropolitan().expect("dnt: invalid config")),
-      Arc::new(dnt::interdepartmental().expect("inter: invalid config")),
-      Arc::new(busmatick::codesa(busmatick_config("CODESA_URL")).expect("codesa: invalid config")),
-      Arc::new(busmatick::mdoturismo(busmatick_config("MDOTURISMO_URL")).expect("mdoturismo: invalid config")),
-      Arc::new(busmatick::micro(busmatick_config("MICRO_URL")).expect("micro: invalid config")),
-      Arc::new(busmatick::solantigua(busmatick_config("SOLANTIGUA_URL")).expect("solantigua: invalid config")),
+      Arc::new(provider::stm::provider(stm_conf()).expect("stm: invalid config")),
+      Arc::new(provider::dnt::metropolitan().expect("dnt: invalid config")),
+      Arc::new(provider::dnt::interdepartmental().expect("inter: invalid config")),
+      Arc::new(provider::busmatick::codesa(busmatick_conf("CODESA_URL")).expect("codesa: invalid config")),
+      Arc::new(provider::busmatick::mdoturismo(busmatick_conf("MDOTURISMO_URL")).expect("mdoturismo: invalid config")),
+      Arc::new(provider::busmatick::micro(busmatick_conf("MICRO_URL")).expect("micro: invalid config")),
+      Arc::new(provider::busmatick::solantigua(busmatick_conf("SOLANTIGUA_URL")).expect("solantigua: invalid config")),
+      Arc::new(provider::busmatick::copay(busmatick_conf("COPAY_URL")).expect("copay: invalid config")),
+      Arc::new(
+        provider::busmatick::microrivera(busmatick_conf("MICRORIVERA_URL")).expect("microrivera: invalid config"),
+      ),
     ];
 
     for provider in &providers {
@@ -168,9 +175,9 @@ impl State {
   }
 }
 
-fn stm_config() -> stm::StmConfig {
+fn stm_conf() -> provider::stm::StmConfig {
   let var = |key: &str| std::env::var(key).unwrap_or_default();
-  stm::StmConfig {
+  provider::stm::StmConfig {
     api_url: var("IM_API_URL"),
     auth_url: var("IM_AUTH_URL"),
     client_id: var("IM_CLIENT_ID"),
@@ -178,8 +185,8 @@ fn stm_config() -> stm::StmConfig {
   }
 }
 
-fn busmatick_config(key: &str) -> busmatick::BusmatickConfig {
-  busmatick::BusmatickConfig { base: std::env::var(key).unwrap_or_default() }
+fn busmatick_conf(key: &str) -> provider::busmatick::BusmatickConfig {
+  provider::busmatick::BusmatickConfig { base: std::env::var(key).unwrap_or_default() }
 }
 
 fn cors_layer() -> tower_http::cors::CorsLayer {

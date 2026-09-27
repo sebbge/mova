@@ -1,0 +1,24 @@
+.toggle {
+  display: inline-flex;
+  margin-left: auto;
+  margin-right: calc(var(--space-2) * -1);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--hover-tint);
+  }
+}
+
+.sun,
+:global(:root[data-theme='dark']) .moon {
+  display: none;
+}
+
+:global(:root[data-theme='dark']) .sun {
+  display: block;
+}

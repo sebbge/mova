@@ -85,6 +85,8 @@ export interface Stop {
   stop_id: string;
   stop_name: string;
   area?: string; // ISO 3166-2
+  station?: string; // platforms only
+  platform?: string;
   lat: number;
   lng: number;
   bearing_rad?: number;
@@ -103,6 +105,9 @@ export interface StopItem {
   lat: number;
   lng: number;
   providers?: string[];
+  station?: string; // platforms only
+  platform?: string;
+  footprint?: number[];
 }
 
 export interface BusRoute {
@@ -117,6 +122,8 @@ export interface BusRoute {
 export interface RouteStop {
   stop_id: string;
   cluster: string; // shelter ref
+  station?: string; // platforms only
+  platform?: string;
   stop_name: string;
   stop_sequence: number;
   lat: number;

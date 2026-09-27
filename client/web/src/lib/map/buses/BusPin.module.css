@@ -44,7 +44,7 @@
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
-  border-radius: 50%;
+  border-radius: 45%;
   border: 2px solid var(--pin-outline);
   box-shadow: var(--pin-shadow);
 
@@ -75,6 +75,23 @@
   }
 }
 
+.company {
+  position: absolute;
+  top: calc(50% + 16px);
+  left: 50%;
+  translate: -50% 0;
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+  text-shadow:
+    0 0 2px var(--surface),
+    0 0 2px var(--surface),
+    0 0 3px var(--surface);
+}
+
 .still {
   opacity: 0.6;
 
@@ -83,7 +100,7 @@
   }
 
   .badge {
-    filter: grayscale(1);
+    border-radius: 25%;
   }
 }
 

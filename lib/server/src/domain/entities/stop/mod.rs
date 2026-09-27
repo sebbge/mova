@@ -38,6 +38,9 @@ pub struct ScheduledLine {
 pub struct Stop {
   pub stop_id: String,
   pub stop_name: String,
+  /// Platforms only: station and number
+  pub station: Option<String>,
+  pub platform: Option<String>,
   /// Department of the point
   pub area: Option<String>,
   pub lat: f64,
@@ -64,6 +67,10 @@ pub struct StopItem {
   pub lng: f64,
   /// Providers sharing the point, only when several
   pub providers: Option<Vec<String>>,
+  pub station: Option<String>,
+  pub platform: Option<String>,
+  /// Terminal outline, `[lng, lat, lng, lat, …]`
+  pub footprint: Option<Vec<f64>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -499,6 +506,48 @@ impl StopLine {
       });
     }
   }
+
+  /// Shapeless lines: buses without ETA, map only
+  async fn attach_shapeless(
+    state: &crate::State,
+    scope: &Scope,
+    lines: &mut StopLines,
+    positions: &HashMap<String, Line>,
+  ) {
+    let mut known: HashSet<String> =
+      lines.values().flat_map(|l| l.arrivals.iter()).filter_map(|a| a.bus.as_ref().map(|b| b.id.clone())).collect();
+
+    let mut loose: Vec<(String, Bus)> = Vec::new();
+    for (line_id, line) in positions.iter().filter(|(id, _)| lines.contains_key(*id)) {
+      for bus in &line.buses {
+        if known.insert(bus.id.clone()) {
+          loose.push((line_id.clone(), bus.clone()));
+        }
+      }
+    }
+    if loose.is_empty() {
+      return;
+    }
+
+    let mut candidates: Vec<String> = loose.iter().map(|(id, _)| id.clone()).collect();
+    candidates.sort();
+    candidates.dedup();
+    let Ok(shapeless) = Self::shapeless(&state.db, scope, &candidates).await else {
+      return;
+    };
+
+    for (line_id, bus) in loose.into_iter().filter(|(id, _)| shapeless.contains(id)) {
+      let stop_line = lines.entry(line_id.clone()).or_insert_with(|| Self::empty(line_id));
+      stop_line.arrivals.push(StopArrival {
+        eta: None,
+        live: false,
+        bus: Some(bus),
+        zonal: false,
+        interpolated: false,
+        stop_position: None,
+      });
+    }
+  }
 }
 
 use super::bus::Lines;
@@ -589,6 +638,7 @@ impl StopDetail {
     let mut lines = StopLine::fuse(state, scope, stop_id, static_lines, upcoming, &positions).await;
     StopLine::apply_ghosts(state, scope, stop_id, &mut lines, &positions).await;
     StopLine::attach_past_stop_buses(state, scope, stop_id, &mut lines, &positions).await;
+    StopLine::attach_shapeless(state, scope, &mut lines, &positions).await;
     StopLine::attach_relayed(state, scope, stop_id, &mut lines).await;
     Self::from_lines(lines)
   }

@@ -175,7 +175,8 @@ impl RouteShape {
     let q = r#"
       SELECT s.provider || '-' || s.stop_id AS stop_id,
              COALESCE(s.cluster, s.provider || '-' || s.stop_id) AS cluster,
-             s.stop_name, st.stop_sequence, round(ST_Y(s.geom::geometry)::numeric, 5)::float8 AS lat, round(ST_X(s.geom::geometry)::numeric, 5)::float8 AS lng, s.bearing_rad
+             s.stop_name, st.stop_sequence, round(ST_Y(s.geom::geometry)::numeric, 5)::float8 AS lat, round(ST_X(s.geom::geometry)::numeric, 5)::float8 AS lng, s.bearing_rad,
+             s.station, s.platform
       FROM stop_times st JOIN stops s ON s.region = st.region AND s.provider = st.provider AND s.stop_id = st.stop_id
       WHERE st.region = $2 AND st.provider = $3 AND st.trip_id = $1
       ORDER BY st.stop_sequence

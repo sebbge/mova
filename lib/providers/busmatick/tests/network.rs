@@ -1,5 +1,5 @@
-use citymob_busmatick::{BusmatickConfig, codesa, mdoturismo, micro, solantigua};
-use citymob_core::provider::{Provider, Vehicles};
+use citymob_nexus_core::provider::{Provider, Vehicles};
+use citymob_provider_busmatick::{BusmatickConfig, codesa, copay, mdoturismo, micro, microrivera, solantigua};
 
 fn config(base: &str) -> BusmatickConfig {
   BusmatickConfig { base: base.to_string() }
@@ -19,6 +19,16 @@ async fn three_instances_respond() {
 
   let (a, b, c) = tokio::join!(fleet_size(codesa), fleet_size(mdoturismo), fleet_size(micro));
   eprintln!("codesa={a} mdoturismo={b} micro={c}");
+}
+
+#[tokio::test]
+#[ignore = "network"]
+async fn paysandu_y_rivera_responden() {
+  let copay = copay(config("https://bus.copay.com.uy:10443/pub")).expect("config");
+  let rivera = microrivera(config("http://microltda.ddns.net:8705/pub")).expect("config");
+
+  let (a, b) = tokio::join!(fleet_size(copay), fleet_size(rivera));
+  eprintln!("copay={a} microrivera={b}");
 }
 
 #[tokio::test]

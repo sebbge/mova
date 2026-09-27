@@ -28,7 +28,7 @@
 
     &.active {
       color: var(--sheet-header-fg, var(--text-primary));
-      border-bottom-color: var(--brand-contrast);
+      border-bottom-color: currentColor;
     }
 
     &:disabled {

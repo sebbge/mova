@@ -26,6 +26,8 @@ export class MapSelection {
   readonly #setBusFromStop: Setter<boolean>;
   readonly #lineFromBus: Accessor<string | null>;
   readonly #setLineFromBus: Setter<string | null>;
+  readonly #pinnedBus: Accessor<string | null>; // reset when the open bus changes
+  readonly #setPinnedBus: Setter<string | null>;
   readonly #liveRegions: Accessor<string>; // stable string
   readonly #setLiveRegions: Setter<string>;
 
@@ -36,6 +38,7 @@ export class MapSelection {
     [this.#busFromStop, this.#setBusFromStop] = createSignal(false);
     [this.#lineFromBus, this.#setLineFromBus] = createSignal<string | null>(null);
     [this.#liveRegions, this.#setLiveRegions] = createSignal('');
+    [this.#pinnedBus, this.#setPinnedBus] = createSignal<string | null>(null);
 
     createEffect(() => onCleanup(this.regionBuses.follow(this.#liveRegions()) ?? (() => {})));
 
@@ -103,6 +106,11 @@ export class MapSelection {
 
   get busId(): string | null {
     return this.url.get(P.bus);
+  }
+
+  get followBusId(): string | null {
+    const pinned = this.#pinnedBus();
+    return pinned !== null && pinned === this.busId ? pinned : null;
   }
 
   get shapeRef(): string | null {
@@ -182,6 +190,16 @@ export class MapSelection {
     this.#setBusFromStop(false);
     this.#setLineFromBus(null);
     this.url.select({[P.stop]: id, ...LINE_CLEARED, [P.bus]: null});
+  }
+
+  // first tap opens, then pins/unpins the camera
+  tapBus(bus: Bus) {
+    if (bus.id !== this.busId) {
+      this.#setPinnedBus(null);
+      this.openBus(bus);
+      return;
+    }
+    this.#setPinnedBus((pinned) => (pinned === bus.id ? null : bus.id));
   }
 
   // brings its line

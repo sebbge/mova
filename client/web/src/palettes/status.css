@@ -1,11 +1,9 @@
-/* delay and freshness never share a color */
-
 :root {
-  --meta-emissions: #4caf50;
-  --meta-thermal: #03a9f4;
-  --meta-access: #3667f7;
+  --meta-emissions: oklch(0.6731 0.1624 144.21);
+  --meta-thermal: oklch(0.6991 0.157 238.99);
+  --meta-access: oklch(0.5688 0.2219 265.38);
 
-  --freshness-live: #00b360;
-  --freshness-low: #f57c00;
-  --freshness-imprecise: #e53935;
+  --freshness-live: oklch(0.62 0.16 156);
+  --freshness-low: oklch(0.712 0.1795 53.54);
+  --freshness-imprecise: oklch(0.6083 0.209 27.03);
 }

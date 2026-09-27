@@ -31,6 +31,21 @@ fn alias(key: String, table: &[(&str, &str)]) -> String {
   table.iter().find(|(from, _)| *from == key).map_or(key, |(_, to)| to.to_string())
 }
 
+/// IM `codigoEmpresa`, the DNT GTFS `agency_id`
+pub fn company_name(code: i64) -> String {
+  match code {
+    10 => "COETC".into(),
+    13 => "CASANOVA".into(),
+    18 => "COPSA".into(),
+    20 => "COME".into(),
+    29 => "CITA".into(),
+    35 => "TALA-PANDO-MONTEVIDEO".into(),
+    50 => "CUTCSA".into(),
+    70 => "UCOT".into(),
+    _ => code.to_string(),
+  }
+}
+
 pub fn route_name(raw: &str) -> String {
   let stripped = raw.split('(').next().unwrap_or(raw);
   let parts: Vec<&str> = stripped.split('/').map(str::trim).filter(|p| !p.is_empty()).collect();
