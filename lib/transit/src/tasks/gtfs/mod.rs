@@ -118,6 +118,7 @@ async fn run_once(state: &crate::Transit) {
 
     // all providers, only after a change
     merge_physical_stops(state).await;
+    state.synced.send_modify(|n| *n += 1);
   }
 
   // every time, outlines come from migrations

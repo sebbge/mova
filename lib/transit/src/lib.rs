@@ -41,6 +41,7 @@ pub struct Network {
   cache: Cache,
   gtfs_versions: GtfsVersions,
   rebuild_webhook: Option<String>,
+  synced: tokio::sync::watch::Sender<u64>,
 }
 
 #[derive(Clone)]
@@ -84,7 +85,8 @@ impl Transit {
       }
     }
 
-    Ok(Self(Arc::new(Network { providers, db: postgres, tasks_db, cache, gtfs_versions, rebuild_webhook })))
+    let (synced, _) = tokio::sync::watch::channel(0);
+    Ok(Self(Arc::new(Network { providers, db: postgres, tasks_db, cache, gtfs_versions, rebuild_webhook, synced })))
   }
 
   pub fn spawn_tasks(&self) {
@@ -114,6 +116,22 @@ impl Transit {
 
   pub async fn versions_token(&self) -> String {
     versions_token(&*self.gtfs_versions.read().await)
+  }
+
+  pub async fn fare_products(&self) -> Vec<sdk::fares::FareProduct> {
+    let mut products = Vec::new();
+    for provider in &self.providers {
+      let Some(fares) = &provider.fares else { continue };
+      match fares.products().await {
+        Ok(found) => products.extend(found),
+        Err(e) => tracing::warn!(provider = provider.id, error = ?e, "[fares] couldn't load products"),
+      }
+    }
+    products
+  }
+
+  pub fn synced(&self) -> tokio::sync::watch::Receiver<u64> {
+    self.synced.subscribe()
   }
 
   pub fn until_sync(&self) -> u64 {

@@ -1,3 +1,4 @@
+use crate::planner::Error as Planner;
 use crate::transit::Error as Transit;
 
 use axum::response::{IntoResponse, Response};
@@ -6,6 +7,7 @@ use axum::{Json, http::StatusCode};
 #[derive(Debug)]
 pub enum Error {
   Transit(Transit),
+  Planner(Planner),
   BadRequest(String),
 }
 pub type Result<T> = std::result::Result<T, Error>;
@@ -29,10 +31,24 @@ impl IntoResponse for Error {
         (StatusCode::SERVICE_UNAVAILABLE, serde_json::json!({ "error": "realtime data unavailable" }))
       }
       Self::Transit(Transit::NotFound(msg)) => (StatusCode::NOT_FOUND, serde_json::json!({ "error": msg })),
+      Self::Planner(Planner::Transit(e)) => return Self::Transit(e).into_response(),
+      Self::Planner(Planner::NotReady) => {
+        (StatusCode::SERVICE_UNAVAILABLE, serde_json::json!({ "error": "planner not ready" }))
+      }
+      Self::Planner(Planner::Internal(msg)) => {
+        tracing::error!(error = %msg, "[api] planner error");
+        (StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!({ "error": "internal server error" }))
+      }
       Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, serde_json::json!({ "error": msg })),
     };
 
     (status, Json(body)).into_response()
+  }
+}
+
+impl From<Planner> for Error {
+  fn from(e: Planner) -> Self {
+    Self::Planner(e)
   }
 }
 

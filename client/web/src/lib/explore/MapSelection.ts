@@ -1,11 +1,12 @@
 import {createEffect, createSignal, onCleanup, type Accessor, type Setter} from 'solid-js';
-import type {Bus} from '~/lib/api/types';
+import type {Bus, BusLeg} from '~/lib/api/types';
 import {RegionBuses} from '~/lib/bus/RegionBuses';
 import {hasLines, providerOf} from '~/lib/domain/providers';
 import {regionsShowingAllBuses} from '~/lib/domain/regions';
 import {LineFeed} from '~/lib/line/LineFeed';
 import {StopFeed} from '~/lib/stop/StopFeed';
 import type {MapUrl} from './MapUrl';
+import {TripPlanner} from './TripPlanner';
 
 const P = {stop: 'parada', line: 'linea', variant: 'v', direction: 'd', shape: 's', bus: 'bus'} as const;
 const LINE_CLEARED = {[P.line]: null, [P.variant]: null, [P.direction]: null, [P.shape]: null};
@@ -15,6 +16,7 @@ export class MapSelection {
   readonly stops = new StopFeed();
   readonly line = new LineFeed();
   readonly regionBuses = new RegionBuses();
+  readonly planner: TripPlanner;
 
   readonly #directionHint: Accessor<string | null>; // tapped arrival's destination
   readonly #setDirectionHint: Setter<string | null>;
@@ -32,6 +34,7 @@ export class MapSelection {
   readonly #setLiveRegions: Setter<string>;
 
   constructor(private readonly url: MapUrl) {
+    this.planner = new TripPlanner(url, () => this.childOpen);
     [this.#directionHint, this.#setDirectionHint] = createSignal<string | null>(null);
     [this.#lineCompany, this.#setLineCompany] = createSignal<string>();
     [this.#knownName, this.#setKnownName] = createSignal<string>();
@@ -160,6 +163,7 @@ export class MapSelection {
   }
 
   onView(center: {lng: number; lat: number}, km2: number) {
+    this.planner.setCenter({lat: center.lat, lng: center.lng});
     this.#setLiveRegions(
       regionsShowingAllBuses(center.lng, center.lat, km2)
         .map((r) => r.id)
@@ -167,8 +171,12 @@ export class MapSelection {
     );
   }
 
-  get open(): boolean {
+  get childOpen(): boolean {
     return Boolean(this.stopId || this.lineId || this.selectedBus);
+  }
+
+  get open(): boolean {
+    return this.childOpen || this.planner.active;
   }
 
   // no browser history
@@ -182,10 +190,17 @@ export class MapSelection {
       };
     }
     if (this.lineId && this.stopId) return () => this.url.select(LINE_CLEARED);
-    return undefined;
+    const trip = this.planner;
+    if (!this.childOpen) return trip.active && trip.option !== null ? () => trip.setOption(null) : undefined;
+    return trip.active ? () => this.close() : undefined;
   }
 
   openStop(id: string, name?: string) {
+    const picking = this.planner.picking;
+    if (picking) {
+      this.planner.setPoint(picking, {kind: 'stop', ref: id});
+      return;
+    }
     this.#setKnownName(name);
     this.#setBusFromStop(false);
     this.#setLineFromBus(null);
@@ -260,6 +275,19 @@ export class MapSelection {
       [P.direction]: direction === undefined ? null : String(direction),
       [P.shape]: null,
     });
+  }
+
+  openLeg(leg: BusLeg) {
+    this.#setDirectionHint(leg.headsign);
+    this.#setLineCompany(undefined);
+    this.#setLineFromBus(null);
+    this.url.select({...LINE_CLEARED, [P.line]: leg.line, [P.variant]: leg.route_id, [P.bus]: null});
+  }
+
+  // open child first, else the trip
+  closeSheet() {
+    if (this.childOpen) this.close();
+    else this.planner.close();
   }
 
   deselectBus() {

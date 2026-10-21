@@ -12,6 +12,7 @@ mova-sdk.workspace = true
 brotli.workspace = true
 chrono.workspace = true
 flate2.workspace = true
+futures-util.workspace = true
 gtfs-structures.workspace = true
 redis.workspace = true
 reqwest.workspace = true

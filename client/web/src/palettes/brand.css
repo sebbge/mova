@@ -1,5 +1,5 @@
 :root {
-  --brand: oklch(0.54 0.08 165);
+  --brand: oklch(62.941% 0.11278 162.956);
 
   --brand-dark: hsl(from var(--brand) h calc(s * 0.45) 11%);
   --brand-light: hsl(from var(--brand) h s 31%);
@@ -9,4 +9,7 @@
 
   --bus: oklch(0.5134 0.1603 255.67);
   --walk: oklch(0.5624 0 0);
+
+  --trip-origin: oklch(0.62 0.16 156);
+  --trip-destination: oklch(0.6083 0.209 27.03);
 }

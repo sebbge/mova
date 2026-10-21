@@ -1,0 +1,49 @@
+[
+  {
+    "id": "stm-1h",
+    "name": "1 hora",
+    "currency": "UYU",
+    "window_min": 60,
+    "max_rides": 2,
+    "prices": [
+      { "payment": "card", "category": "common", "cents": 5200 },
+      { "payment": "cash", "category": "common", "cents": 6400 },
+      { "payment": "card", "category": "student_a", "cents": 2850 },
+      { "payment": "card", "category": "student_b", "cents": 3990 },
+      { "payment": "card", "category": "retiree_a", "cents": 1400 },
+      { "payment": "card", "category": "retiree_b", "cents": 2300 }
+    ],
+    "scope": { "providers": ["stm"], "except_lines": ["D1", "D5", "D8", "D9", "D10", "D11"] }
+  },
+  {
+    "id": "stm-2h",
+    "name": "2 horas",
+    "currency": "UYU",
+    "window_min": 120,
+    "prices": [
+      { "payment": "card", "category": "common", "cents": 7800 },
+      { "payment": "cash", "category": "common", "cents": 9700 }
+    ],
+    "scope": { "providers": ["stm"] }
+  },
+  {
+    "id": "stm-diferencial",
+    "name": "Diferencial",
+    "currency": "UYU",
+    "max_rides": 1,
+    "prices": [
+      { "payment": "card", "category": "common", "cents": 7800 },
+      { "payment": "cash", "category": "common", "cents": 9700 }
+    ],
+    "scope": { "providers": ["stm"], "lines": ["D1", "D5", "D8", "D9", "D10", "D11"] }
+  },
+  {
+    "id": "stm-metropolitana",
+    "name": "Combinación metropolitana",
+    "currency": "UYU",
+    "window_min": 60,
+    "max_rides": 2,
+    "prices": [{ "payment": "card", "category": "common", "cents": 8000 }],
+    "scope": { "providers": ["stm", "dnt"], "requires": ["stm", "dnt"] }
+  }
+]

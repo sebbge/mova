@@ -9,6 +9,7 @@ export default function Sheet(props: {
   open: boolean;
   onBack?: () => void; // only with a previous step
   onClose?: () => void;
+  sticky?: boolean; // drag down and escape never close it
   children: JSX.Element;
 }) {
   const [snap, setSnap] = createSignal(1);
@@ -32,7 +33,7 @@ export default function Sheet(props: {
 
       const threshold = innerHeight * DRAG_THRESHOLD;
       const next = snap() + (dragOffset() > threshold ? -1 : dragOffset() < -threshold ? 1 : 0);
-      if (next < 0) props.onClose?.();
+      if (next < 0 && !props.sticky) props.onClose?.();
       setSnap(clampSnap(next));
       setDragging(false);
       setDragOffset(0);
@@ -52,7 +53,7 @@ export default function Sheet(props: {
 
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') props.onClose?.();
+      if (e.key === 'Escape' && !props.sticky) props.onClose?.();
       if (e.key === 'ArrowUp') setSnap(clampSnap(snap() + 1));
       if (e.key === 'ArrowDown') setSnap(clampSnap(snap() - 1));
     };

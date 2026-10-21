@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib/core", "lib/sdk", "lib/transit", "lib/server", "lib/providers/*"]
+members = ["lib/core", "lib/sdk", "lib/transit", "lib/planner", "lib/server", "lib/providers/*"]
 resolver = "3"
 
 [workspace.package]
@@ -14,6 +14,7 @@ publish = false
 mova-core = { path = "lib/core" }
 mova-sdk = { path = "lib/sdk" }
 mova-transit = { path = "lib/transit" }
+mova-planner = { path = "lib/planner" }
 
 # providers
 mova-provider-busmatick = { path = "lib/providers/busmatick" }
@@ -26,6 +27,7 @@ chrono = { version = "0.4.45", features = ["serde"] }
 dotenvy = "0.15.7"
 futures-util = { version = "0.3.34", default-features = false }
 gtfs-structures = { version = "0.50.1", default-features = false }
+rustc-hash = "2.1"
 redis = { version = "1.7.0", features = ["tokio-comp"] }
 reqwest = { version = "0.13.5", default-features = false, features = [
     "json",

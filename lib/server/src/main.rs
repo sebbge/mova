@@ -1,3 +1,4 @@
+use mova_planner as planner;
 use mova_sdk as sdk;
 use mova_transit as transit;
 
@@ -12,6 +13,7 @@ mod handlers;
 mod middleware;
 
 pub use self::error::{Error, Result};
+use self::planner::Planner;
 use self::sdk::provider::Provider;
 use self::transit::{Transit, TransitConfig};
 
@@ -21,6 +23,7 @@ pub type Res<T> = Result<axum::Json<T>>;
 
 struct Server {
   transit: Transit,
+  planner: Planner,
 }
 impl Server {
   pub fn router(state: State) -> axum::Router<State> {
@@ -29,6 +32,7 @@ impl Server {
     // GTFS
     let gtfs = axum::Router::new()
       .route("/stops", get(handlers::stop::list))
+      .route("/stops/search", get(handlers::stop::search))
       .route("/stop/{provider}/{id}", get(handlers::stop::stop))
       .route("/routes", get(handlers::routes::list))
       .route("/routes/search", get(handlers::routes::search))
@@ -46,9 +50,16 @@ impl Server {
       .route("/health", get(handlers::health::health))
       .route("/buses", get(handlers::bus::list))
       .route("/stop/arrivals/{provider}/{id}", get(handlers::stop::arrivals))
-      .route("/line/buses/{provider}/{id}", get(handlers::line::buses));
+      .route("/line/buses/{provider}/{id}", get(handlers::line::buses))
+      .route("/plan", get(handlers::plan::plan));
 
-    gtfs.merge(schedule).merge(realtime)
+    // OSM
+    let places = axum::Router::new()
+      .route("/places/search", get(handlers::place::search))
+      .route("/places/reverse", get(handlers::place::reverse))
+      .route("/place/{id}", get(handlers::place::place));
+
+    gtfs.merge(schedule).merge(realtime).merge(places)
   }
 }
 
@@ -80,7 +91,9 @@ impl State {
     let config = TransitConfig { database_url, redis_url, providers, rebuild_webhook };
     let transit = Transit::connect(config).await.expect("failed to start transit");
 
-    State(Arc::new(Server { transit }))
+    let planner = Planner::start(transit.clone());
+
+    State(Arc::new(Server { transit, planner }))
   }
 }
 

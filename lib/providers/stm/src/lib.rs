@@ -2,6 +2,7 @@ use mova_sdk as sdk;
 use sdk::prelude::*;
 
 mod api;
+mod fares;
 mod names;
 mod provider;
 use std::sync::Arc;
@@ -19,6 +20,7 @@ pub fn provider(config: StmConfig) -> Result<Provider> {
     Provider::new("stm", Region::UyMo, &[Region::UyMo, Region::UyCa, Region::UySj])
       .feed(stm.clone())
       .fleet(stm.clone())
-      .arrivals(stm),
+      .arrivals(stm)
+      .fares(Arc::new(fares::StmFares::load()?)),
   )
 }

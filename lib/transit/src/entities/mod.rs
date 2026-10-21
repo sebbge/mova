@@ -4,4 +4,6 @@ use std::collections::{HashMap, HashSet};
 
 pub mod bus;
 pub mod line;
+pub mod place;
+pub mod service_day;
 pub mod stop;

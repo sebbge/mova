@@ -1,0 +1,21 @@
+[package]
+name = "mova-planner"
+authors.workspace = true
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+mova-core.workspace = true
+mova-sdk.workspace = true
+mova-transit.workspace = true
+
+chrono.workspace = true
+rustc-hash.workspace = true
+serde.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true

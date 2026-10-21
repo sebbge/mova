@@ -1,3 +1,4 @@
+import type {ExpressionSpecification} from 'maplibre-gl';
 import type {Service} from '~/lib/domain/providers';
 import {companySlug} from '~/lib/ui/palette';
 
@@ -50,4 +51,23 @@ export function pinColor(service: Service): string {
 
 export function pinOutline(service: Service): string {
   return token(`--service-${service}-outline`, outline());
+}
+
+export function tripColor(kind: 'walk' | 'origin' | 'destination'): string {
+  if (kind === 'walk') return token('--walk', '#7a7a7a');
+  return token(`--trip-${kind}`, kind === 'origin' ? '#2e9d62' : '#d8453a');
+}
+
+export function serviceColor(): ExpressionSpecification {
+  return [
+    'match',
+    ['get', 'service'],
+    'inter',
+    pinColor('inter'),
+    'suburban',
+    pinColor('suburban'),
+    'neutral',
+    pinColor('neutral'),
+    pinColor('urban'),
+  ];
 }

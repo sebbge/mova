@@ -1,0 +1,11 @@
+.screen {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+.canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}

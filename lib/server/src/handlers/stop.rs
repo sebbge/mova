@@ -3,7 +3,7 @@ use crate::transit::Encoding;
 
 use axum::http::HeaderMap;
 use axum::response::Response;
-use entities::stop::{Stop, StopDetail, StopSchedule};
+use entities::stop::{Stop, StopDetail, StopHit, StopSchedule};
 
 #[derive(serde::Deserialize)]
 pub struct AreaQuery {
@@ -82,4 +82,23 @@ pub async fn arrivals(
   tracing::info!(provider, stop = stop_id, lines = detail.lines.len(), rt, "GET 200 /stop/arrivals/:provider/:id");
 
   Ok(Json(detail))
+}
+
+#[derive(serde::Deserialize)]
+pub struct SearchQuery {
+  q: String,
+  near: Option<String>,
+}
+
+///# GET <MOVA>/stops/search?q=tres cruces&near=-34.9,-56.16
+pub async fn search(State(state): State<crate::State>, Query(query): Query<SearchQuery>) -> crate::Res<Vec<StopHit>> {
+  let term = query.q.trim();
+  if term.is_empty() {
+    return Err(crate::Error::BadRequest("q must not be empty".into()));
+  }
+  let near = query.near.as_deref().map(point).transpose()?;
+
+  let hits = Stop::load_search(&state.transit, term, near).await?;
+  tracing::info!(term, hits = hits.len(), "GET 200 /stops/search");
+  Ok(Json(hits))
 }

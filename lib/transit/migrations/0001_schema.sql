@@ -1,4 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS postgis;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- `region` issues the id, `area` is where the point lies
 CREATE TABLE areas (
@@ -29,6 +30,28 @@ CREATE TABLE terminals (
 
 CREATE INDEX idx_terminals_geom ON terminals USING GIST (geom);
 CREATE INDEX idx_terminals_stop ON terminals (region, provider, stop_id);
+
+CREATE TABLE places (
+    id       TEXT PRIMARY KEY,
+    kind     TEXT NOT NULL,
+    name     TEXT NOT NULL,
+    category TEXT NOT NULL,
+    context  TEXT,
+    key      TEXT NOT NULL,
+    crossing TEXT,
+    rank     SMALLINT NOT NULL,
+    geom     GEOGRAPHY(Point, 4326) NOT NULL,
+    area     TEXT REFERENCES areas(code)
+);
+
+CREATE INDEX idx_places_key ON places USING GIN (key gin_trgm_ops);
+CREATE INDEX idx_places_crossing ON places USING GIN (crossing gin_trgm_ops) WHERE crossing IS NOT NULL;
+CREATE INDEX idx_places_geom ON places USING GIST (geom);
+
+CREATE TABLE places_metadata (
+    source    TEXT NOT NULL,
+    loaded_at TIMESTAMPTZ NOT NULL
+);
 
 CREATE TABLE gtfs_metadata (
     provider  TEXT        PRIMARY KEY,

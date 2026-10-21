@@ -1,8 +1,8 @@
 import type {FeatureCollection} from 'geojson';
-import type {ExpressionSpecification, GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
+import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import type {StopItem} from '~/lib/api/types';
 import {providerInfo, serviceOf, type Service} from '~/lib/domain/providers';
-import {pinColor} from '~/lib/map/paint';
+import {serviceColor} from '~/lib/map/paint';
 import type {StopsMarks} from './stops';
 
 const SOURCE = 'terminals';
@@ -18,17 +18,7 @@ export const terminalsLayer = {
   },
 
   addLayers(map: MapLibreMap) {
-    const color: ExpressionSpecification = [
-      'match',
-      ['get', 'service'],
-      'inter',
-      pinColor('inter'),
-      'suburban',
-      pinColor('suburban'),
-      'neutral',
-      pinColor('neutral'),
-      pinColor('urban'),
-    ];
+    const color = serviceColor();
     map.addLayer({
       id: 'terminals-fill',
       type: 'fill',

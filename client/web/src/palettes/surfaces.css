@@ -15,6 +15,7 @@
   --pin-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
   --banner-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
   --hover-tint: rgb(255 255 255 / 0.15);
+  --panel-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
 
   color-scheme: light;
 }

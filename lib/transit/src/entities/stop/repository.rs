@@ -1,7 +1,7 @@
 use super::super::bus::Bus;
 use super::{
-  ApproachingBusRow, PastStopBusRow, ScheduleProfile, ScheduledLine, Stop, StopArrival, StopDetail, StopItem, StopLine,
-  StopLines, StopRoute, StopSchedule,
+  ApproachingBusRow, PastStopBusRow, ScheduleProfile, ScheduledLine, Stop, StopArrival, StopDetail, StopHit, StopItem,
+  StopLine, StopLines, StopRoute, StopSchedule,
 };
 use crate::helpers::Encoding;
 use crate::scope::Scope;
@@ -426,6 +426,35 @@ impl Stop {
     ORDER BY s.stop_id
     "#;
     Ok(sqlx::query_as(q).bind(area).fetch_all(db).await?)
+  }
+
+  pub async fn load_search(
+    transit: &crate::Transit,
+    term: &str,
+    near: Option<crate::sdk::geo::Point>,
+  ) -> crate::Result<Vec<StopHit>> {
+    let q = r#"
+    WITH words AS (
+      SELECT w FROM unnest(string_to_array(translate(lower($1), 'áéíóúüñ', 'aeiouun'), ' ')) AS w WHERE w <> ''
+    )
+    SELECT s.provider || '-' || s.stop_id AS id, s.stop_name AS name,
+           round(ST_Y(s.geom::geometry)::numeric, 5)::float8 AS lat,
+           round(ST_X(s.geom::geometry)::numeric, 5)::float8 AS lng,
+           COALESCE(s.area, s.region) AS area, s.station, s.platform
+    FROM stops s
+    WHERE (s.cluster IS NULL OR s.cluster = s.provider || '-' || s.stop_id)
+      AND NOT s.zonal
+      AND EXISTS (SELECT 1 FROM words)
+      AND NOT EXISTS (
+        SELECT 1 FROM words
+        WHERE translate(lower(s.stop_name || ' ' || COALESCE(s.station, '')), 'áéíóúüñ', 'aeiouun') NOT LIKE '%' || w || '%'
+      )
+    ORDER BY CASE WHEN $2::float8 IS NULL THEN 0
+                  ELSE ST_Distance(s.geom, ST_SetSRID(ST_MakePoint($3::float8, $2::float8), 4326)::geography) END,
+             s.stop_name
+    LIMIT 12
+    "#;
+    Ok(sqlx::query_as(q).bind(term).bind(near.map(|p| p.lat)).bind(near.map(|p| p.lng)).fetch_all(&transit.db).await?)
   }
 
   /// Terminal outline to its "Terminal …" or "Intercambiador …" stop nearest the center, returns the count

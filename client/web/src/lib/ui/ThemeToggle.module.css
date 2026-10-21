@@ -1,6 +1,5 @@
 .toggle {
   display: inline-flex;
-  margin-left: auto;
   margin-right: calc(var(--space-2) * -1);
   padding: var(--space-2);
   border: 0;

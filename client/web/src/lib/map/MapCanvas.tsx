@@ -10,6 +10,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import {Protocol} from 'pmtiles';
 import {createEffect, createSignal, Match, on, onCleanup, onMount, Switch} from 'solid-js';
+import type {FeatureCollection} from 'geojson';
 import type {Bus, RouteShape, StopItem} from '~/lib/api/types';
 import {DEFAULT_REGION, regionsInView, type MapCamera} from '~/lib/domain/regions';
 import {theme} from '~/lib/ui/theme';
@@ -17,6 +18,7 @@ import {BusLayer} from './buses/BusLayer';
 import {routeLayer} from './layers/route';
 import {stopsLayer} from './layers/stops';
 import {terminalsLayer} from './layers/terminals';
+import {tripLayer} from './layers/trip';
 import styles from './MapCanvas.module.css';
 import {RegionStops} from './RegionStops';
 import {ATTRIBUTION, basemapStyle} from './style';
@@ -40,6 +42,10 @@ export default function MapCanvas(props: {
   onSelectBus?: (bus: Bus) => void;
   onBackground?: () => void;
   onView?: (center: {lng: number; lat: number}, km2: number) => void;
+  trip?: FeatureCollection | null;
+  tripFitKey?: string | null; // a new key frames the trip once
+  picking?: boolean;
+  onPick?: (point: {lat: number; lng: number}) => void;
 }) {
   let container!: HTMLDivElement;
   const [map, setMap] = createSignal<MapLibreMap>();
@@ -92,6 +98,7 @@ export default function MapCanvas(props: {
       stopsLayer.add(instance, 'stops');
       routeLayer.addLayers(instance, props.routeCompany);
       stopsLayer.add(instance, 'route-stops');
+      tripLayer.add(instance);
     };
 
     /* eslint-disable solid/reactivity -- maplibre event handlers read props when they fire */
@@ -126,7 +133,9 @@ export default function MapCanvas(props: {
       instance.on('mouseleave', layer, () => (instance.getCanvas().style.cursor = ''));
     }
     instance.on('click', (e) => {
-      if (instance.queryRenderedFeatures(e.point, {layers: hits}).length === 0) props.onBackground?.();
+      if (instance.queryRenderedFeatures(e.point, {layers: hits}).length > 0) return;
+      if (props.picking) props.onPick?.({lat: e.lngLat.lat, lng: e.lngLat.lng});
+      else props.onBackground?.();
     });
 
     // setStyle drops custom layers
@@ -166,6 +175,25 @@ export default function MapCanvas(props: {
   createEffect(() => {
     const m = map();
     if (m) routeLayer.paint(m, props.routeCompany);
+  });
+
+  createEffect(() => {
+    const m = map();
+    if (m) tripLayer.set(m, props.trip ?? null);
+  });
+
+  createEffect(() => {
+    const m = map();
+    if (m) m.getCanvas().style.cursor = props.picking ? 'crosshair' : '';
+  });
+
+  let fittedTrip: string | null = null;
+  createEffect(() => {
+    const m = map();
+    const key = props.tripFitKey;
+    if (!m || !props.trip || !key || key === fittedTrip) return;
+    fittedTrip = key;
+    tripLayer.fit(m, props.trip);
   });
 
   createEffect(() => {

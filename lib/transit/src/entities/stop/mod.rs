@@ -74,6 +74,18 @@ pub struct StopItem {
   pub footprint: Option<Vec<f64>>,
 }
 
+#[skip_serializing_none]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
+pub struct StopHit {
+  pub id: String,
+  pub name: String,
+  pub lat: f64,
+  pub lng: f64,
+  pub area: Option<String>,
+  pub station: Option<String>,
+  pub platform: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StopLine {
   pub line: String,

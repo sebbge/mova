@@ -1,5 +1,20 @@
 import {PUBLIC_API_URL} from 'astro:env/client';
-import type {Bus, BusRoute, RegionBus, RouteShape, Stop, StopDetail, StopItem, StopSchedule} from './types';
+import type {
+  Bus,
+  BusRoute,
+  Category,
+  Itinerary,
+  Payment,
+  PlaceHit,
+  RegionBus,
+  RouteShape,
+  Stop,
+  StopDetail,
+  StopHit,
+  StopItem,
+  StopSchedule,
+  TravelMode,
+} from './types';
 
 export class ApiError extends Error {
   constructor(
@@ -57,6 +72,10 @@ function gtfs<T>(path: string, opts: Options = {}): Promise<T> {
   return entry.value as Promise<T>;
 }
 
+function near(at?: {lat: number; lng: number}, digits = 3): string | undefined {
+  return at ? `${at.lat.toFixed(digits)},${at.lng.toFixed(digits)}` : undefined;
+}
+
 function query(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
@@ -94,4 +113,20 @@ export const api = {
     request<Bus[]>(`/line/buses/${provider}/${encodeURIComponent(line)}`, o),
 
   regionBuses: (region: string, o?: Options) => request<RegionBus[]>(`/buses${query({region})}`, o),
+
+  searchStops: (q: string, at?: {lat: number; lng: number}, o?: Options) =>
+    gtfs<StopHit[]>(`/stops/search${query({q, near: near(at)})}`, o),
+
+  searchPlaces: (q: string, at?: {lat: number; lng: number}, o?: Options) =>
+    request<PlaceHit[]>(`/places/search${query({q, near: near(at)})}`, o),
+
+  place: (id: string, o?: Options) => request<PlaceHit>(`/place/${encodeURIComponent(id)}`, o),
+
+  reversePlace: (at: {lat: number; lng: number}, o?: Options) =>
+    request<PlaceHit | null>(`/places/reverse${query({at: near(at, 5)})}`, o),
+
+  plan: (
+    p: {from: string; to: string; at?: string; payment?: Payment; category?: Category; mode?: TravelMode},
+    o?: Options
+  ) => request<Itinerary[]>(`/plan${query(p)}`, o),
 };
