@@ -22,7 +22,8 @@ export default function SheetHeader(props: {
       aria-valuemin={drag ? 0 : undefined}
       aria-valuenow={drag?.snap}
       aria-valuemax={drag?.max}
-      onPointerDown={(e) => drag?.start(e)}>
+      onPointerDown={(e) => drag?.start(e)}
+      onKeyDown={(e) => drag?.key(e)}>
       {props.lead}
       <div class={styles.meta} aria-busy={props.loading || undefined}>
         <Show when={props.kicker !== undefined}>

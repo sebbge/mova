@@ -4,6 +4,7 @@
   --brand-dark: hsl(from var(--brand) h calc(s * 0.45) 11%);
   --brand-light: hsl(from var(--brand) h s 31%);
   --brand-contrast: hsl(from var(--brand) h s 100%);
+  --brand-deep: oklch(from var(--brand) 0.54 c h);
 
   --map-outline: oklch(1 0 0);
 

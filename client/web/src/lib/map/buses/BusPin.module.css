@@ -12,8 +12,10 @@
     filter 0.15s ease,
     opacity 0.2s ease;
 
-  &:hover .badge {
-    transform: scale(1.08);
+  @media (hover: hover) {
+    &:hover .badge {
+      transform: scale(1.08);
+    }
   }
 
   &:focus-visible {
@@ -38,7 +40,7 @@
   padding: 0;
   overflow: hidden;
   background: var(--pin);
-  color: var(--brand-contrast);
+  color: oklch(from var(--pin) clamp(0.2, (0.6 - l) * 1000, 1) 0 0);
   font-size: 11px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -46,7 +48,7 @@
   white-space: nowrap;
   border-radius: 45%;
   border: 2px solid var(--pin-outline);
-  box-shadow: var(--pin-shadow);
+  box-shadow: var(--shadow-pin);
 
   &.long {
     font-size: 9px;
@@ -71,7 +73,7 @@
     stroke: var(--pin-outline);
     stroke-width: 1.2;
     stroke-linejoin: round;
-    filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.3));
+    filter: drop-shadow(var(--shadow-pin));
   }
 }
 

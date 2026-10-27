@@ -23,9 +23,9 @@
 
 .label {
   padding: var(--space-3) var(--gutter) var(--space-1);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-label);
   color: var(--service-on-muted);
 }
 
@@ -56,18 +56,21 @@
 
   button {
     width: 100%;
+    min-height: var(--tap);
     padding: var(--space-2) var(--gutter);
     border: 0;
     border-left: 3px solid transparent;
     background: none;
     color: var(--service-on-muted);
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     text-align: left;
     cursor: pointer;
 
-    &:hover:not(:disabled) {
-      background: var(--service-hover);
-      color: var(--service-on);
+    @media (hover: hover) {
+      &:hover:not(:disabled) {
+        background: var(--service-hover);
+        color: var(--service-on);
+      }
     }
 
     &.active {
@@ -93,8 +96,10 @@
     text-align: left;
     cursor: pointer;
 
-    &:hover {
-      background: var(--service-hover);
+    @media (hover: hover) {
+      &:hover {
+        background: var(--service-hover);
+      }
     }
   }
 }
@@ -102,10 +107,10 @@
 .id {
   min-width: 3.25rem;
   color: var(--service-on-muted);
-  font-size: 0.75rem;
+  font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
 }
 
 .name {
-  font-size: 0.9rem;
+  font-size: var(--text-sm);
 }

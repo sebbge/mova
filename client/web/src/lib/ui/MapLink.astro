@@ -1,0 +1,39 @@
+---
+interface Props {
+  href: string;
+  title: string;
+  sub: string;
+}
+
+const {href, title, sub} = Astro.props;
+---
+
+<a href={href}>
+  <span>{title}</span>
+  <span class='sub'>{sub}</span>
+</a>
+
+<style>
+  a {
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-3) var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--divider);
+    border-radius: var(--radius);
+    font-weight: 600;
+  }
+
+  @media (hover: hover) {
+    a:hover {
+      text-decoration: none;
+      border-color: var(--brand);
+    }
+  }
+
+  .sub {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: var(--text-sm);
+  }
+</style>

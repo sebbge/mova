@@ -16,7 +16,7 @@ export default function Arrivals(props: {stopId: string}) {
 
       <Switch
         fallback={
-          <ul class={styles.lines}>
+          <ul class={`rows ${styles.lines}`}>
             <For each={source.lines}>
               {(line) => (
                 <li>

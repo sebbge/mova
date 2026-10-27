@@ -77,7 +77,7 @@ export default function LineSearch(props: {region: string}) {
           <p class={styles.note}>Sin resultados para "{query()}".</p>
         </Match>
         <Match when={lines().length > 0}>
-          <ul class={styles.list}>
+          <ul class='rows'>
             <For each={lines()}>
               {(line) => (
                 <li>

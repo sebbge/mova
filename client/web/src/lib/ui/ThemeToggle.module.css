@@ -1,15 +1,21 @@
 .toggle {
-  display: inline-flex;
-  margin-right: calc(var(--space-2) * -1);
-  padding: var(--space-2);
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: var(--tap);
+  height: var(--tap);
+  margin-right: calc(var(--space-3) * -1);
+  padding: 0;
   border: 0;
   border-radius: var(--radius-pill);
   background: none;
   color: inherit;
   cursor: pointer;
 
-  &:hover {
-    background: var(--hover-tint);
+  @media (hover: hover) {
+    &:hover {
+      background: color-mix(in srgb, var(--brand-contrast) 16%, transparent);
+    }
   }
 }
 

@@ -11,7 +11,7 @@
 
 .drag {
   padding-left: max(var(--space-4), var(--sheet-nav-start, 0px));
-  padding-right: 44px;
+  padding-right: var(--tap);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -39,19 +39,19 @@
 
 .kicker {
   color: var(--sheet-header-muted, var(--text-secondary));
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--tracking-label);
   font-variant-numeric: tabular-nums;
 
   &:global(.shimmer) {
     width: 7ch;
-    height: 0.8125rem;
+    height: var(--text-sm);
   }
 }
 
 .title {
-  font-size: 1.1rem;
+  font-size: var(--text-lg);
   max-height: 2.7em;
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -61,12 +61,12 @@
 
   &:global(.shimmer) {
     width: 65%;
-    height: 1.1rem;
+    height: var(--text-lg);
   }
 }
 
 .subtitle {
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   line-height: 1.25;
   color: var(--sheet-header-muted, var(--text-secondary));
   overflow: hidden;
@@ -75,6 +75,6 @@
 
   &:global(.shimmer) {
     width: 45%;
-    height: 0.8125rem;
+    height: var(--text-sm);
   }
 }

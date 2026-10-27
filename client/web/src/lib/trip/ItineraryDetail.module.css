@@ -6,7 +6,7 @@
 }
 
 .duration {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
   font-weight: 700;
 }
 
@@ -21,7 +21,7 @@
 
   &.unknown {
     font-weight: 400;
-    font-size: 0.875rem;
+    font-size: var(--text-sm);
     color: var(--text-secondary);
   }
 }
@@ -90,7 +90,7 @@
 }
 
 .detail {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
 
 .muted {
@@ -117,7 +117,7 @@
 }
 
 .live {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--freshness-live);
 }
@@ -169,6 +169,6 @@
   li {
     display: flex;
     justify-content: space-between;
-    font-size: 0.9375rem;
+    font-size: var(--text-base);
   }
 }

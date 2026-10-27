@@ -18,6 +18,17 @@
   --space-8: 2rem;
 
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.75rem;
+  --tracking-label: 0.05em;
+
+  --tap: 44px;
   --gutter: 16px;
   --content-max: 720px;
 }
@@ -30,6 +41,7 @@
 
 html {
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -51,13 +63,13 @@ h3 {
 }
 
 h1 {
-  font-size: 1.75rem;
+  font-size: var(--text-3xl);
 }
 h2 {
-  font-size: 1.25rem;
+  font-size: var(--text-xl);
 }
 h3 {
-  font-size: 1rem;
+  font-size: var(--text-base);
 }
 
 p {
@@ -69,20 +81,46 @@ a {
   text-decoration: none;
 }
 
-a:hover {
-  text-decoration: underline;
+@media (hover: hover) {
+  a:hover {
+    text-decoration: underline;
+  }
 }
 
 :focus-visible {
   outline: 2px solid var(--brand);
   outline-offset: 2px;
-  border-radius: var(--radius-sm);
 }
 
 button,
 input {
   font: inherit;
   color: inherit;
+}
+
+::placeholder {
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--brand) 30%, transparent);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: var(--divider);
+  border-radius: var(--radius);
+  overflow: hidden;
+
+  & > * {
+    background: var(--surface);
+  }
 }
 
 * {

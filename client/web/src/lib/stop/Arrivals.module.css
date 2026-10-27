@@ -6,27 +6,16 @@
 
 .note {
   color: var(--text-secondary);
-  font-size: 0.9375rem;
+  font-size: var(--text-base);
 }
 
 .lines {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  background: var(--divider);
-  border-radius: var(--radius);
-  overflow: hidden;
-
   li {
     display: grid;
     grid-template-columns: 3.5rem 1fr auto;
     align-items: baseline;
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
-    background: var(--surface);
   }
 }
 
@@ -37,7 +26,7 @@
 
 .destination {
   color: var(--text-secondary);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -51,12 +40,10 @@
 }
 
 .eta {
-  font-size: 0.875rem;
-  opacity: 0.65;
+  font-size: var(--text-sm);
 }
 
 .first {
-  font-size: 1rem;
+  font-size: var(--text-base);
   font-weight: 600;
-  opacity: 1;
 }

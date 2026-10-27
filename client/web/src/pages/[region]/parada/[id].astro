@@ -79,7 +79,7 @@ const jsonLd = JSON.stringify({
       {stop.lines.length === 0 ? (
         <p class='note'>Ninguna línea registrada en esta parada.</p>
       ) : (
-        <ul class='lines'>
+        <ul class='rows lines'>
           {stop.lines.map((line) => (
             <li>
               <a href={href.line(region.slug, line.line)}>
@@ -127,10 +127,10 @@ const jsonLd = JSON.stringify({
 
   .kicker,
   .only {
-    color: var(--service);
-    font-size: 0.875rem;
+    color: oklch(from var(--service) clamp(var(--tint-text-min), l, var(--tint-text-max)) c h);
+    font-size: var(--text-sm);
     text-transform: uppercase;
-    letter-spacing: 0.06em;
+    letter-spacing: var(--tracking-label);
   }
 
   .kicker {
@@ -147,21 +147,26 @@ const jsonLd = JSON.stringify({
     margin-top: var(--space-2);
 
     a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 2.25rem;
       padding: var(--space-1) var(--space-3);
       border: 1px solid var(--divider);
       border-radius: var(--radius-pill);
-      font-size: 0.875rem;
+      font-size: var(--text-sm);
       color: var(--text-secondary);
 
-      &:hover {
-        text-decoration: none;
-        border-color: var(--service);
+      @media (hover: hover) {
+        &:hover {
+          text-decoration: none;
+          border-color: var(--service);
+        }
       }
 
       &.current {
         background: var(--service);
         border-color: var(--service);
-        color: var(--brand-contrast);
+        color: oklch(from var(--service) clamp(0.2, (0.6 - l) * 1000, 1) 0 0);
       }
     }
   }
@@ -174,36 +179,27 @@ const jsonLd = JSON.stringify({
 
   .note {
     color: var(--text-secondary);
-    font-size: 0.9375rem;
+    font-size: var(--text-base);
   }
 
   .lines {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    background: var(--divider);
-    border-radius: var(--radius);
-    overflow: hidden;
-
     a {
       display: flex;
       align-items: center;
       gap: var(--space-3);
       padding: var(--space-3) var(--space-4);
-      background: var(--surface);
 
-      &:hover {
-        text-decoration: none;
-        background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+      @media (hover: hover) {
+        &:hover {
+          text-decoration: none;
+          background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+        }
       }
     }
   }
 
   .destinations {
-    font-size: 0.9375rem;
+    font-size: var(--text-base);
     color: var(--text-secondary);
     overflow: hidden;
     text-overflow: ellipsis;

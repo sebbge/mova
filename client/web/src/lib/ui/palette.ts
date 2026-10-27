@@ -44,7 +44,7 @@ export function companySlug(company: string | undefined): string | undefined {
 
 export function companyVar(company: string | undefined): string {
   const slug = companySlug(company);
-  return slug ? `var(--company-${slug})` : 'var(--text-secondary)';
+  return slug ? `var(--company-${slug})` : 'var(--company-unknown)';
 }
 
 export function companyOutlineVar(company: string | undefined): string {

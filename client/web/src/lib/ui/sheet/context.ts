@@ -3,6 +3,7 @@ import {createContext, useContext} from 'solid-js';
 // each header is the drag surface
 export interface SheetDrag {
   start: (e: PointerEvent) => void;
+  key: (e: KeyboardEvent) => void;
   readonly snap: number;
   readonly max: number;
 }

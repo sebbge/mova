@@ -45,6 +45,12 @@ export default function Sheet(props: {
 
   const drag: SheetDrag = {
     start,
+    key(e) {
+      if (e.key === 'ArrowUp') setSnap(clampSnap(snap() + 1));
+      else if (e.key === 'ArrowDown') setSnap(clampSnap(snap() - 1));
+      else return;
+      e.preventDefault();
+    },
     get snap() {
       return snap();
     },
@@ -53,9 +59,8 @@ export default function Sheet(props: {
 
   onMount(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !props.sticky) props.onClose?.();
-      if (e.key === 'ArrowUp') setSnap(clampSnap(snap() + 1));
-      if (e.key === 'ArrowDown') setSnap(clampSnap(snap() - 1));
+      const typing = e.target instanceof HTMLElement && e.target.closest('input, textarea, select, [contenteditable]');
+      if (e.key === 'Escape' && !props.sticky && !typing) props.onClose?.();
     };
     addEventListener('keydown', onKeyDown);
     onCleanup(() => removeEventListener('keydown', onKeyDown));
@@ -67,7 +72,7 @@ export default function Sheet(props: {
         class={styles.sheet}
         classList={{[styles.dragging]: dragging()}}
         style={{
-          '--sheet-nav-start': props.onBack ? '44px' : undefined,
+          '--sheet-nav-start': props.onBack ? 'var(--tap)' : undefined,
           height: `${SNAPS[snap()] * 100}dvh`,
           transform: `translateY(${Math.max(0, dragOffset())}px)`,
         }}>

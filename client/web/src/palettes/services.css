@@ -24,34 +24,6 @@
   --scrollbar-on-tint: oklch(0 0 0 / 0.2);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --tint-header-s: 0.75;
-    --tint-header-l: 19%;
-    --tint-list-s: 0.4;
-    --tint-list-l: 10%;
-    --tint-header-base: oklch(0.1582 0.0072 258.37);
-    --tint-list-base: oklch(0.1582 0.0072 258.37);
-    --tint-header-mix: 24%;
-    --tint-list-mix: 9%;
-    --tint-pin-l: 0;
-
-    --service-header-on: oklch(1 0 0);
-    --service-header-on-muted: oklch(0.7492 0.0234 263.16);
-    --skeleton-on-header: oklch(1 0 0 / 0.18);
-    --skeleton-on-header-sheen: oklch(1 0 0 / 0.34);
-
-    --service-on: oklch(1 0 0);
-    --service-on-muted: oklch(0.7492 0.0234 263.16);
-    --service-divider: oklch(1 0 0 / 0.07);
-    --service-hover: oklch(1 0 0 / 0.05);
-
-    --skeleton-on-tint: oklch(1 0 0 / 0.18);
-    --skeleton-on-tint-sheen: oklch(1 0 0 / 0.34);
-    --scrollbar-on-tint: oklch(1 0 0 / 0.2);
-  }
-}
-
 :root[data-theme='dark'] {
   --tint-header-s: 0.75;
   --tint-header-l: 19%;

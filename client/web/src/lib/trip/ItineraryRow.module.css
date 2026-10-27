@@ -10,8 +10,10 @@
   text-align: left;
   cursor: pointer;
 
-  &:hover {
-    background: var(--service-hover);
+  @media (hover: hover) {
+    &:hover {
+      background: var(--service-hover);
+    }
   }
 }
 
@@ -23,7 +25,7 @@
 }
 
 .duration {
-  font-size: 1.125rem;
+  font-size: var(--text-lg);
   font-weight: 700;
 }
 
@@ -50,7 +52,7 @@
   align-items: center;
   gap: 2px;
   color: var(--walk);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-weight: 600;
 }
 
@@ -58,7 +60,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-1);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
 }
 

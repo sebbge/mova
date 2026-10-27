@@ -78,14 +78,16 @@ import {href} from '~/lib/ui/href';
     font-weight: 600;
   }
 
-  .regions a:hover {
-    text-decoration: none;
-    border-color: var(--brand);
-    color: var(--brand);
+  @media (hover: hover) {
+    .regions a:hover {
+      text-decoration: none;
+      border-color: var(--brand);
+      color: var(--brand);
+    }
   }
 
   .note {
     color: var(--text-secondary);
-    font-size: 0.9375rem;
+    font-size: var(--text-base);
   }
 </style>
