@@ -1,6 +1,6 @@
-import {For, Show} from 'solid-js';
+import {createSignal, For, onCleanup, Show} from 'solid-js';
 import type {Bus, BusFreshness} from '~/lib/api/types';
-import {delayLabel, splitCompanyLine} from '~/lib/format';
+import {ago, delayLabel, splitCompanyLine} from '~/lib/format';
 import LineLead from '~/lib/line/LineLead';
 import {companyTint, freshnessVar} from '~/lib/ui/palette';
 import parts from '~/lib/ui/sheet/parts.module.css';
@@ -17,10 +17,15 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
   const tint = () => companyTint(props.bus.company);
   const split = () =>
     props.bus.company ? splitCompanyLine(props.bus.line, props.bus.company) : {line: props.bus.line};
+  // operator delay vs position age
+  const delay = () => delayLabel(props.bus.delay_min);
   const tags = () =>
-    [delayLabel(props.bus.delay_min), props.bus.access, props.bus.emissions, props.bus.thermal_comfort].filter(
-      (t): t is string => Boolean(t)
-    );
+    [props.bus.access, props.bus.emissions, props.bus.thermal_comfort].filter((t): t is string => Boolean(t));
+
+  const [now, setNow] = createSignal(Date.now());
+  const timer = setInterval(() => setNow(Date.now()), 5_000);
+  onCleanup(() => clearInterval(timer));
+  const signal = () => ago(props.bus.timestamp, now());
 
   return (
     <>
@@ -36,9 +41,18 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
         <p class={styles.state} style={{'--dot': freshnessVar(true, props.bus.freshness)}}>
           <span class={styles.dot} aria-hidden='true' />
           {CONFIDENCE[props.bus.freshness]}
+          <Show when={signal()}>
+            <span class={styles.ago}>Última señal: {signal()}</span>
+          </Show>
         </p>
 
         <dl class={styles.facts}>
+          <Show when={delay()}>
+            <div>
+              <dt>Horario</dt>
+              <dd>{delay()}</dd>
+            </div>
+          </Show>
           <div>
             <dt>Velocidad</dt>
             <dd>

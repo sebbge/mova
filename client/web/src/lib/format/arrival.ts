@@ -16,6 +16,14 @@ export function arrivalLabel(arrival: Pick<StopArrival, 'eta' | 'stop_position'>
   return eta(arrival?.eta);
 }
 
+// screen readers read "12'" as "12 apostrophe"
+export function arrivalSpoken(arrival: Pick<StopArrival, 'eta' | 'stop_position'> | undefined): string {
+  const minutes = arrival?.eta;
+  if (arrival?.stop_position || minutes === undefined || minutes <= 0) return arrivalLabel(arrival);
+  if (minutes > 60) return `a las ${eta(minutes)}`;
+  return minutes === 1 ? 'en 1 minuto' : `en ${minutes} minutos`;
+}
+
 export function arrivalTitle(
   arrival: Pick<StopArrival, 'live' | 'zonal' | 'interpolated' | 'stop_position'> | undefined
 ): string {

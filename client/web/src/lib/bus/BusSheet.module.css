@@ -22,6 +22,14 @@
   flex-shrink: 0;
 }
 
+.ago {
+  margin-left: auto;
+  color: var(--service-on-muted);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
 .facts {
   margin: 0;
 

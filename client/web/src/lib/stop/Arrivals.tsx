@@ -1,14 +1,21 @@
-import {For, Match, onCleanup, Switch} from 'solid-js';
-import {arrivalLabel, arrivalTitle} from '~/lib/format';
-import {freshnessVar} from '~/lib/ui/palette';
+import {For, Match, onCleanup, Show, Switch} from 'solid-js';
+import type {StopLine} from '~/lib/api/types';
+import {href} from '~/lib/ui/href';
+import ArrivalRow from './ArrivalRow';
 import styles from './Arrivals.module.css';
 import {ArrivalsSource} from './ArrivalsSource';
 import ArrivalsSkeleton from './ArrivalsSkeleton';
 
-export default function Arrivals(props: {stopId: string}) {
+export default function Arrivals(props: {stopId: string; split?: boolean}) {
   // eslint-disable-next-line solid/reactivity
   const source = new ArrivalsSource(props.stopId);
   onCleanup(() => source.close());
+
+  // live -> bus, scheduled -> line
+  const mapHref = (line: StopLine) => {
+    const bus = line.arrivals.find((a) => a.live && a.bus)?.bus;
+    return href.map({parada: props.stopId, ...(bus ? {bus: bus.id} : {linea: line.line})});
+  };
 
   return (
     <section class={styles.root}>
@@ -16,29 +23,20 @@ export default function Arrivals(props: {stopId: string}) {
 
       <Switch
         fallback={
-          <ul class={`rows ${styles.lines}`}>
-            <For each={source.lines}>
-              {(line) => (
-                <li>
-                  <span class={styles.line}>{line.line}</span>
-                  <span class={styles.destination}>{line.destination ?? ''}</span>
-                  <span class={styles.etas}>
-                    <For each={line.arrivals.slice(0, 3)}>
-                      {(arrival, i) => (
-                        <span
-                          class={styles.eta}
-                          classList={{[styles.first]: i() === 0}}
-                          style={{color: freshnessVar(arrival.live, arrival.bus?.freshness)}}
-                          title={arrivalTitle(arrival)}>
-                          {arrivalLabel(arrival)}
-                        </span>
-                      )}
-                    </For>
-                  </span>
-                </li>
-              )}
-            </For>
-          </ul>
+          <>
+            <Show when={source.liveFailed}>
+              <p class={styles.note}>No pudimos actualizar el tiempo real. Lo que ves puede no estar al día.</p>
+            </Show>
+            <ul class='rows'>
+              <For each={source.lines}>
+                {(line) => (
+                  <li>
+                    <ArrivalRow line={line} split={props.split} href={mapHref(line)} />
+                  </li>
+                )}
+              </For>
+            </ul>
+          </>
         }>
         <Match when={source.loading}>
           <p class='sr-only' role='status'>
@@ -47,7 +45,7 @@ export default function Arrivals(props: {stopId: string}) {
           <ArrivalsSkeleton rows={6} />
         </Match>
         <Match when={source.lines.length === 0 && source.liveFailed}>
-          <p class={styles.note}>No pudimos traer las llegadas. Los horarios de las líneas siguen abajo.</p>
+          <p class={styles.note}>No pudimos traer las llegadas. Volvemos a intentar cada 30 segundos.</p>
         </Match>
         <Match when={source.lines.length === 0}>
           <p class={styles.note}>No hay llegadas previstas ahora.</p>

@@ -9,6 +9,7 @@ import LineBadge from '~/lib/line/LineBadge';
 import Arrivals from '~/lib/stop/Arrivals';
 import Header from '~/lib/ui/Header.astro';
 import {href} from '~/lib/ui/href';
+import MapLink from '~/lib/ui/MapLink.astro';
 import SourceCredit from '~/lib/ui/SourceCredit';
 import {stopPaths} from '../../_paths';
 
@@ -72,7 +73,9 @@ const jsonLd = JSON.stringify({
       )}
     </div>
 
-    <Arrivals client:load stopId={stop.stop_id} />
+    <Arrivals client:load stopId={stop.stop_id} split={service === 'inter'} />
+
+    <MapLink href={href.map({parada: stop.stop_id})} title='Ver en el mapa' sub='Dónde vienen los buses, en vivo' />
 
     <section>
       <h2>Líneas que paran acá</h2>

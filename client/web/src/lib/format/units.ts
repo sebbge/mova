@@ -4,6 +4,15 @@ export function distance(meters: number): string {
   return meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
 }
 
+export function ago(iso: string | undefined, now = Date.now()): string | undefined {
+  const t = iso ? Date.parse(iso) : NaN;
+  if (Number.isNaN(t)) return undefined;
+  const s = Math.max(0, Math.round((now - t) / 1000));
+  if (s < 60) return `hace ${s} s`;
+  const m = Math.round(s / 60);
+  return m < 60 ? `hace ${m} min` : `hace ${Math.round(m / 60)} h`;
+}
+
 export function clock(iso: string): string {
   return iso.slice(11, 16);
 }

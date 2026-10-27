@@ -52,6 +52,10 @@ export class StopFeed {
     return this.#current()?.loading ?? false;
   }
 
+  get failed(): boolean {
+    return this.#current()?.liveFailed ?? false;
+  }
+
   get refs(): string[] {
     return Object.keys(this.#sources());
   }

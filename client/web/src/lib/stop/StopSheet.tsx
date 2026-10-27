@@ -1,15 +1,13 @@
 import {For, Match, Show, Switch} from 'solid-js';
 import type {Stop, StopLine} from '~/lib/api/types';
 import {orderedRefs, providerInfo, providerOf, serviceOf, stopKicker} from '~/lib/domain/providers';
-import {arrivalLabel, arrivalTitle, rawId, splitCompanyLine} from '~/lib/format';
-import LineBadge from '~/lib/line/LineBadge';
-import MetaIcons from '~/lib/ui/icons/MetaIcons';
+import {rawId} from '~/lib/format';
 import ServiceIcon from '~/lib/ui/icons/ServiceIcon';
 import StopIcon from '~/lib/ui/icons/StopIcon';
-import {freshnessVar} from '~/lib/ui/palette';
 import SourceCredit from '~/lib/ui/SourceCredit';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import SheetTabs from '~/lib/ui/sheet/SheetTabs';
+import ArrivalRow from './ArrivalRow';
 import ArrivalsSkeleton from './ArrivalsSkeleton';
 import styles from './StopSheet.module.css';
 
@@ -19,6 +17,7 @@ export default function StopSheet(props: {
   stopName?: string; // skips "loading"
   arrivals: StopLine[];
   loading: boolean;
+  failed?: boolean;
   onSelectLine?: (line: string, destination?: string, company?: string) => void;
   onSelectService?: (ref: string) => void; // same shelter, already loaded
 }) {
@@ -69,54 +68,24 @@ export default function StopSheet(props: {
       <div class={`${styles.list} ${styles[service()] ?? ''}`}>
         <Switch
           fallback={
-            <ul class={`${styles.lines} sheet-scroll`}>
-              <For each={props.arrivals}>
-                {(line) => {
-                  const first = () => line.arrivals[0];
-                  const label = () => (service() === 'inter' ? splitCompanyLine(line.line) : {line: line.line});
-                  return (
+            <>
+              <Show when={props.failed}>
+                <p class={styles.stale}>No pudimos actualizar el tiempo real. Lo que ves puede no estar al día.</p>
+              </Show>
+              <ul class={`${styles.lines} sheet-scroll`}>
+                <For each={props.arrivals}>
+                  {(line) => (
                     <li>
-                      <button
-                        onClick={() => props.onSelectLine?.(line.line, line.destination ?? undefined, line.company)}>
-                        <LineBadge
-                          line={label().line}
-                          company={line.company || label().company}
-                          size='sm'
-                          variant='flat'
-                        />
-                        <span class={styles.info}>
-                          <Show when={label().company}>
-                            <span class={styles.company}>{label().company}</span>
-                          </Show>
-                          <span class={styles.destination}>{line.destination ?? ''}</span>
-                          <MetaIcons bus={first()?.bus} />
-                        </span>
-                        <span class={styles.etas}>
-                          <span
-                            class={styles.eta}
-                            classList={{[styles.scheduleGuess]: Boolean(first()?.zonal || first()?.interpolated)}}
-                            style={{color: freshnessVar(first()?.live ?? false, first()?.bus?.freshness)}}
-                            title={arrivalTitle(first())}>
-                            {arrivalLabel(first())}
-                          </span>
-                          <Show when={line.arrivals.length > 1}>
-                            <span class={styles.next}>
-                              <For each={line.arrivals.slice(1, 3)}>
-                                {(arrival) => (
-                                  <span style={{color: freshnessVar(arrival.live, arrival.bus?.freshness)}}>
-                                    {arrivalLabel(arrival)}
-                                  </span>
-                                )}
-                              </For>
-                            </span>
-                          </Show>
-                        </span>
-                      </button>
+                      <ArrivalRow
+                        line={line}
+                        split={service() === 'inter'}
+                        onClick={() => props.onSelectLine?.(line.line, line.destination ?? undefined, line.company)}
+                      />
                     </li>
-                  );
-                }}
-              </For>
-            </ul>
+                  )}
+                </For>
+              </ul>
+            </>
           }>
           <Match when={props.loading && props.arrivals.length === 0}>
             <p class='sr-only' role='status'>
@@ -125,7 +94,11 @@ export default function StopSheet(props: {
             <ArrivalsSkeleton />
           </Match>
           <Match when={props.arrivals.length === 0}>
-            <p class={styles.note}>No hay llegadas previstas ahora.</p>
+            <p class={styles.note}>
+              {props.failed
+                ? 'No pudimos traer las llegadas. Volvemos a intentar cada 30 segundos.'
+                : 'No hay llegadas previstas ahora.'}
+            </p>
           </Match>
         </Switch>
         <SourceCredit provider={providerOf(ref())} tinted />
