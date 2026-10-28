@@ -8,6 +8,8 @@
   --tint-header-mix: 70%;
   --tint-list-mix: 6%;
   --tint-pin-l: 0.08;
+  /* pin fill lightness cap for AA */
+  --pin-max-l: 0.55;
 
   --service-header-on: oklch(1 0 0);
   --service-header-on-muted: oklch(0.87 0.026 268.82);

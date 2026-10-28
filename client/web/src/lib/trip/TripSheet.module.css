@@ -1,12 +1,6 @@
 .band {
   --sheet-header-bg: var(--brand-dark);
-  --sheet-header-fg: var(--service-header-on);
-  --sheet-header-muted: var(--service-header-on-muted);
-  --skeleton: var(--skeleton-on-header);
-  --skeleton-sheen: var(--skeleton-on-header-sheen);
-  margin: 0 calc(var(--gutter) * -1);
-  padding: 0 var(--gutter) var(--space-3);
-  background: var(--sheet-header-bg);
+  padding-bottom: var(--space-3);
 }
 
 .chips {

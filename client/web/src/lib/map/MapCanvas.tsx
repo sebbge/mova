@@ -72,7 +72,8 @@ export default function MapCanvas(props: {
         attributionControl: false,
       });
     } catch (e) {
-      setError((e as Error).message); // no webgl
+      console.error('[mova/map]', e); // no webgl
+      setError('Este navegador no puede mostrar el mapa.');
       return;
     }
 
@@ -85,7 +86,7 @@ export default function MapCanvas(props: {
     fitCountry(instance, camera.bounds);
 
     instance.on('error', (e) => {
-      setError(e.error?.message ?? 'No se pudo cargar el mapa');
+      setError('No pudimos cargar parte del mapa. Revisá tu conexión.');
       console.error('[mova/map]', e.error ?? e);
     });
 
@@ -109,8 +110,9 @@ export default function MapCanvas(props: {
       void stops.load(regionsInView(bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()));
     };
 
-    instance.addControl(new NavigationControl({showCompass: false}), 'bottom-right');
-    instance.addControl(new GeolocateControl({trackUserLocation: true, showAccuracyCircle: true}), 'bottom-right');
+    // top, the sheet covers the bottom
+    instance.addControl(new NavigationControl({showCompass: false}), 'top-right');
+    instance.addControl(new GeolocateControl({trackUserLocation: true, showAccuracyCircle: true}), 'top-right');
 
     instance.on('load', () => {
       addLayers();

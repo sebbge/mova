@@ -6,7 +6,7 @@ import parts from '~/lib/ui/sheet/parts.module.css';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import SheetTabs from '~/lib/ui/sheet/SheetTabs';
 import SourceCredit from '~/lib/ui/SourceCredit';
-import {fullStopName, splitCompanyLine} from '~/lib/format';
+import {fullStopName, rawId, splitCompanyLine} from '~/lib/format';
 import LineLead from './LineLead';
 import styles from './LineSheet.module.css';
 import RouteSkeleton from './RouteSkeleton';
@@ -43,7 +43,7 @@ export default function LineSheet(props: {
 
   return (
     <>
-      <div class={`${parts.band} ${parts.onTint}`} style={{'--sheet-header-bg': tint().header}}>
+      <div class={`${parts.band} ${parts.onTint} ${styles.band}`} style={{'--sheet-header-bg': tint().header}}>
         <SheetHeader
           title={props.shape?.headsign ?? props.variants[0]?.route_long_name ?? `Línea ${split().line}`}
           subtitle={props.origin ? `desde ${props.origin}` : ''}
@@ -110,7 +110,7 @@ export default function LineSheet(props: {
                   {(stop) => (
                     <li>
                       <button onClick={() => props.onSelectStop?.(stop.stop_id, stop.stop_name)}>
-                        <span class={styles.id}>{stop.stop_id}</span>
+                        <span class={styles.id}>{rawId(stop.stop_id)}</span>
                         <span class={styles.name}>{fullStopName(stop.stop_name, stop.station)}</span>
                       </button>
                     </li>

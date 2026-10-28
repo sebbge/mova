@@ -1,5 +1,4 @@
 .band {
-  --sheet-header-gap: var(--space-1);
   --sheet-header-fg: var(--service-header-on);
   --sheet-header-muted: var(--service-header-on-muted);
   --skeleton: var(--skeleton-on-header);

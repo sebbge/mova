@@ -53,7 +53,7 @@ export default function BusPin(props: {bus: Bus; dimmed?: boolean; onSelect?: (b
         </span>
       </Show>
 
-      <span class={styles.badge} classList={{[styles.long]: number().length > 3, [styles.xlong]: number().length > 4}}>
+      <span class={styles.badge} classList={{[styles.long]: number().length > 4}}>
         {number()}
       </span>
 

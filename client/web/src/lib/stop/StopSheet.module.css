@@ -1,8 +1,3 @@
-.band {
-  --skeleton: var(--skeleton-on-header);
-  --skeleton-sheen: var(--skeleton-on-header-sheen);
-}
-
 .list {
   --skeleton: var(--skeleton-on-tint);
   --skeleton-sheen: var(--skeleton-on-tint-sheen);
@@ -11,11 +6,6 @@
 
 .band {
   --sheet-header-bg: var(--service-urban-header);
-  --sheet-header-fg: var(--service-header-on);
-  --sheet-header-muted: var(--service-header-on-muted);
-  margin: 0 calc(var(--gutter) * -1);
-  padding: 0 var(--gutter);
-  background: var(--sheet-header-bg);
 
   &.suburban {
     --sheet-header-bg: var(--service-suburban-header);

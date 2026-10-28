@@ -1,3 +1,7 @@
+.band {
+  --sheet-header-gap: var(--space-1);
+}
+
 .content {
   --sheet-header-fg: var(--service-on);
   --sheet-header-muted: var(--service-on-muted);

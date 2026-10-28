@@ -29,7 +29,7 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
 
   return (
     <>
-      <div class={parts.band} style={{'--sheet-header-bg': tint().header}}>
+      <div class={`${parts.band} ${styles.band}`} style={{'--sheet-header-bg': tint().header}}>
         <SheetHeader
           title={props.bus.destination ?? `Línea ${split().line}`}
           subtitle={props.bus.origin ? `desde ${props.bus.origin}` : ''}

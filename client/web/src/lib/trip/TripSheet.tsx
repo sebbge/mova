@@ -1,6 +1,7 @@
 import {createEffect, For, Match, Show, Switch} from 'solid-js';
 import type {BusLeg, TravelMode} from '~/lib/api/types';
 import {departureLabel} from '~/lib/format';
+import parts from '~/lib/ui/sheet/parts.module.css';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import ItineraryDetail from './ItineraryDetail';
 import ItineraryRow from './ItineraryRow';
@@ -31,7 +32,7 @@ export default function TripSheet(props: {
 
   return (
     <>
-      <div class={styles.band}>
+      <div class={`${parts.band} ${styles.band}`}>
         <SheetHeader
           kicker='Cómo llegar'
           title={destination()}

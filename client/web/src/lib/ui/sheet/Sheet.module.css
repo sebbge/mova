@@ -11,6 +11,13 @@
   box-shadow: var(--shadow-sheet);
   transition: height 0.22s cubic-bezier(0.2, 0, 0, 1);
   overflow: hidden;
+  animation: rise 220ms ease-out;
+}
+
+@keyframes rise {
+  from {
+    translate: 0 100%;
+  }
 }
 
 .dragging {

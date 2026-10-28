@@ -1,4 +1,5 @@
 .pin {
+  --pin-fill: oklch(from var(--pin) min(l, var(--pin-max-l)) c h);
   position: relative;
   display: grid;
   place-items: center;
@@ -35,28 +36,24 @@
 .badge {
   display: grid;
   place-items: center;
-  width: 28px;
+  min-width: 28px;
   height: 28px;
-  padding: 0;
+  padding: 0 4px;
   overflow: hidden;
-  background: var(--pin);
-  color: oklch(from var(--pin) clamp(0.2, (0.6 - l) * 1000, 1) 0 0);
-  font-size: 11px;
+  background: var(--pin-fill);
+  color: var(--service-header-on);
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   white-space: nowrap;
-  border-radius: 45%;
+  border-radius: 12px;
   border: 2px solid var(--pin-outline);
   box-shadow: var(--shadow-pin);
 
+  /* long number widens the pin */
   &.long {
-    font-size: 9px;
-  }
-
-  &.xlong {
-    font-size: 7.5px;
-    letter-spacing: -0.03em;
+    font-size: 11px;
   }
 }
 
@@ -69,7 +66,7 @@
   padding-top: 1px;
 
   svg {
-    fill: var(--pin);
+    fill: var(--pin-fill);
     stroke: var(--pin-outline);
     stroke-width: 1.2;
     stroke-linejoin: round;
@@ -83,7 +80,7 @@
   left: 50%;
   translate: -50% 0;
   color: var(--text-primary);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.02em;
   line-height: 1;

@@ -5,6 +5,7 @@ import {rawId} from '~/lib/format';
 import ServiceIcon from '~/lib/ui/icons/ServiceIcon';
 import StopIcon from '~/lib/ui/icons/StopIcon';
 import SourceCredit from '~/lib/ui/SourceCredit';
+import parts from '~/lib/ui/sheet/parts.module.css';
 import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import SheetTabs from '~/lib/ui/sheet/SheetTabs';
 import ArrivalRow from './ArrivalRow';
@@ -33,7 +34,7 @@ export default function StopSheet(props: {
 
   return (
     <>
-      <div class={`${styles.band} ${styles[service()] ?? ''}`}>
+      <div class={`${parts.band} ${styles.band} ${styles[service()] ?? ''}`}>
         <SheetHeader
           kicker={stopKicker(ref(), title(), rawId(props.stop?.siblings?.[0] ?? ref()), props.stop?.station)}
           title={title()}

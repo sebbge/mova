@@ -1,3 +1,7 @@
+.band {
+  --sheet-header-gap: var(--space-1);
+}
+
 .content {
   margin: 0 calc(var(--gutter) * -1);
   padding-bottom: var(--space-4);
