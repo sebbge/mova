@@ -1,5 +1,5 @@
 import type {FeatureCollection} from 'geojson';
-import type {ExpressionSpecification, GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
+import type {ExpressionSpecification, GeoJSONSource, Map as MapLibreMap, SymbolLayerSpecification} from 'maplibre-gl';
 import type {StopItem} from '~/lib/api/types';
 import {
   comboKey,
@@ -13,17 +13,23 @@ import {
 import {STOP_PIN_PIXEL_RATIO, stopDotImage, stopPinImage} from '~/lib/map/images/stopPin';
 import {mapText} from '~/lib/map/paint';
 
-export type StopsSource = 'stops' | 'route-stops';
-
 export interface StopsMarks {
   selectedId: string | null;
   siblings: readonly string[]; // any stop of the shelter
   dim: boolean;
 }
 
+const SOURCE = 'stops';
 const PIN_MIN_ZOOM = 15; // dot -> pin
 
-const OPACITY: ExpressionSpecification = ['case', ['get', 'dim'], 0.45, ['get', 'muted'], 0.75, 1];
+// off route, or another one selected
+export const STOP_DIM_OPACITY = 0.45;
+export const STOP_OPACITY: ExpressionSpecification = [
+  'case',
+  ['any', ['get', 'dim'], ['get', 'muted']],
+  STOP_DIM_OPACITY,
+  1,
+];
 const ORDER: ExpressionSpecification = ['case', ['get', 'selected'], 1, 0];
 
 const imageId = (kind: 'pin' | 'dot', combo: readonly Service[], selected: boolean) =>
@@ -36,8 +42,9 @@ const imageExpr = (kind: 'pin' | 'dot'): ExpressionSpecification => [
   ['case', ['get', 'selected'], '-selected', ''],
 ];
 
+// off-route stops only
 export const stopsLayer = {
-  HITS: ['route-stops-pin', 'route-stops-dot', 'stops-pin', 'stops-dot'],
+  HITS: ['stops-selected', 'stops-pin', 'stops-dot'],
 
   // re-baked on theme change
   bakeImages(map: MapLibreMap) {
@@ -54,55 +61,86 @@ export const stopsLayer = {
     }
   },
 
-  add(map: MapLibreMap, source: StopsSource) {
+  add(map: MapLibreMap) {
     const text = mapText();
-    map.addSource(source, {type: 'geojson', data: features([], {selectedId: null, siblings: [], dim: false})});
+    map.addSource(SOURCE, {type: 'geojson', data: features([], {selectedId: null, siblings: [], dim: false})});
     map.addLayer({
-      id: `${source}-dot`,
+      id: 'stops-dot',
       type: 'symbol',
-      source,
+      source: SOURCE,
       maxzoom: PIN_MIN_ZOOM,
+      filter: ['!', ['get', 'selected']],
       layout: {
         'icon-image': imageExpr('dot'),
-        'icon-size': ['interpolate', ['linear'], ['zoom'], 12, 0.7, PIN_MIN_ZOOM, 1],
+        // under 12.75 they shrink faster
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.45, 12.75, 0.775, PIN_MIN_ZOOM, 1],
         'icon-allow-overlap': true,
         'icon-ignore-placement': true,
         'symbol-sort-key': ORDER,
       },
-      paint: {'icon-opacity': OPACITY},
+      paint: {'icon-opacity': STOP_OPACITY},
     });
+
+    const pinLayout = {
+      'icon-image': imageExpr('pin'),
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      // platform under the pin
+      'text-field': ['get', 'platform'],
+      'text-font': ['Noto Sans Medium'],
+      'text-size': 12,
+      'text-anchor': 'top',
+      'text-offset': [0, 1.6],
+      'text-allow-overlap': true,
+      'text-ignore-placement': true,
+    } satisfies SymbolLayerSpecification['layout'];
+    const pinPaint = {
+      'icon-opacity': STOP_OPACITY,
+      'text-color': text.color,
+      'text-halo-color': text.halo,
+      'text-halo-width': 1.5,
+      'text-opacity': STOP_OPACITY,
+    } satisfies SymbolLayerSpecification['paint'];
+
     map.addLayer({
-      id: `${source}-pin`,
+      id: 'stops-pin',
       type: 'symbol',
-      source,
+      source: SOURCE,
       minzoom: PIN_MIN_ZOOM,
+      filter: ['!', ['get', 'selected']],
       layout: {
-        'icon-image': imageExpr('pin'),
-        'icon-size': ['interpolate', ['linear'], ['zoom'], PIN_MIN_ZOOM, 0.78, 18, 1],
-        'icon-allow-overlap': true,
-        'icon-ignore-placement': true,
+        ...pinLayout,
+        // never past 1, smears
+        'icon-size': [
+          'interpolate',
+          ['linear'],
+          ['zoom'],
+          PIN_MIN_ZOOM,
+          ['case', ['get', 'muted'], 0.7, 0.78],
+          18,
+          ['case', ['get', 'muted'], 0.9, 1],
+        ],
         'symbol-sort-key': ORDER,
-        // platform under the pin
-        'text-field': ['get', 'platform'],
-        'text-font': ['Noto Sans Medium'],
-        'text-size': 12,
-        'text-anchor': 'top',
-        'text-offset': [0, 1.6],
-        'text-allow-overlap': true,
-        'text-ignore-placement': true,
       },
-      paint: {
-        'icon-opacity': OPACITY,
-        'text-color': text.color,
-        'text-halo-color': text.halo,
-        'text-halo-width': 1.5,
-        'text-opacity': OPACITY,
+      paint: pinPaint,
+    });
+
+    // selected is a pin at any zoom
+    map.addLayer({
+      id: 'stops-selected',
+      type: 'symbol',
+      source: SOURCE,
+      filter: ['get', 'selected'],
+      layout: {
+        ...pinLayout,
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 11, 0.55, PIN_MIN_ZOOM, 0.78, 18, 1],
       },
+      paint: pinPaint,
     });
   },
 
-  set(map: MapLibreMap, source: StopsSource, stops: StopItem[], marks: StopsMarks) {
-    (map.getSource(source) as GeoJSONSource | undefined)?.setData(features(stops, marks));
+  set(map: MapLibreMap, stops: StopItem[], marks: StopsMarks) {
+    (map.getSource(SOURCE) as GeoJSONSource | undefined)?.setData(features(stops, marks));
   },
 };
 

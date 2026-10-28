@@ -9,24 +9,28 @@ import {
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import {Protocol} from 'pmtiles';
-import {createEffect, createSignal, Match, on, onCleanup, onMount, Switch} from 'solid-js';
+import {createEffect, createMemo, createSignal, Match, on, onCleanup, onMount, Show, Switch} from 'solid-js';
 import type {FeatureCollection} from 'geojson';
-import type {Bus, RouteShape, StopItem} from '~/lib/api/types';
+import type {Bus, RouteShape} from '~/lib/api/types';
 import {DEFAULT_REGION, regionsInView, type MapCamera} from '~/lib/domain/regions';
+import {companyOutlineVar, companyPinVar} from '~/lib/ui/palette';
 import {theme} from '~/lib/ui/theme';
 import {BusLayer} from './buses/BusLayer';
-import {routeLayer} from './layers/route';
+import {routeLayer, type RouteView} from './layers/route';
 import {stopsLayer} from './layers/stops';
 import {terminalsLayer} from './layers/terminals';
 import {tripLayer} from './layers/trip';
 import styles from './MapCanvas.module.css';
 import {RegionStops} from './RegionStops';
+import {RouteTrack} from './RouteTrack';
 import {ATTRIBUTION, basemapStyle} from './style';
-import {fitCountry, overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, viewportKm2} from './viewport';
+import {fitCountry, overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, uncovered, viewportKm2} from './viewport';
 
 const CAMERA_MS = 400;
 const FOCUS_MS = 500;
 const FOLLOW_MS = 600;
+const FAR_ZOOM = 13; // under it buses shrink
+const GUIDE_INSET = 28; // px
 
 export default function MapCanvas(props: {
   camera: MapCamera;
@@ -51,8 +55,12 @@ export default function MapCanvas(props: {
   const [map, setMap] = createSignal<MapLibreMap>();
   const [error, setError] = createSignal<string | null>(null);
   const [viewKm2, setViewKm2] = createSignal(Infinity);
+  const [zoomStep, setZoomStep] = createSignal(0); // half steps
   const tooWide = () => viewKm2() > STOPS_MAX_KM2;
   const stops = new RegionStops();
+  const track = createMemo(() => (props.shape?.shape ? new RouteTrack(props.shape.shape, props.shape.stops) : null));
+  const isSelectedStop = (id: string) => id === props.selectedStopId || props.selectedSiblings.includes(id);
+  const routeView = (): RouteView => ({shape: props.shape, track: track(), isSelected: isSelectedStop});
 
   onMount(() => {
     void stops.load([DEFAULT_REGION]);
@@ -94,11 +102,10 @@ export default function MapCanvas(props: {
       stopsLayer.bakeImages(instance);
       if (instance.getSource('stops')) return;
       terminalsLayer.addSource(instance);
-      routeLayer.addSource(instance);
+      routeLayer.addSources(instance);
       terminalsLayer.addLayers(instance);
-      stopsLayer.add(instance, 'stops');
+      stopsLayer.add(instance);
       routeLayer.addLayers(instance, props.routeCompany);
-      stopsLayer.add(instance, 'route-stops');
       tripLayer.add(instance);
     };
 
@@ -111,21 +118,26 @@ export default function MapCanvas(props: {
     };
 
     // top, the sheet covers the bottom
-    instance.addControl(new NavigationControl({showCompass: false}), 'top-right');
+    instance.addControl(new NavigationControl(), 'top-right');
     instance.addControl(new GeolocateControl({trackUserLocation: true, showAccuracyCircle: true}), 'top-right');
 
+    const stepZoom = () => setZoomStep(Math.floor(instance.getZoom() * 2) / 2);
+    instance.on('zoom', stepZoom);
+
     instance.on('load', () => {
+      stepZoom();
       addLayers();
       onView();
       setMap(instance);
     });
     instance.on('moveend', onView);
 
-    const hits = [...stopsLayer.HITS, terminalsLayer.HIT];
+    const stopHits = [...routeLayer.HITS, ...stopsLayer.HITS];
+    const hits = [...stopHits, terminalsLayer.HIT];
     for (const layer of hits) {
       instance.on('click', layer, (e) => {
         // stop inside the terminal takes the tap
-        if (layer === terminalsLayer.HIT && instance.queryRenderedFeatures(e.point, {layers: stopsLayer.HITS}).length) {
+        if (layer === terminalsLayer.HIT && instance.queryRenderedFeatures(e.point, {layers: stopHits}).length) {
           return;
         }
         const p = e.features?.[0]?.properties;
@@ -159,8 +171,10 @@ export default function MapCanvas(props: {
     );
 
     const buses = new BusLayer(instance, (bus) => props.onSelectBus?.(bus));
+    instance.on('move', () => updateGuide(instance));
     /* eslint-enable solid/reactivity */
-    createEffect(() => map() && buses.render(props.buses, props.selectedBusId, props.shape));
+    createEffect(() => map() && buses.render(props.buses, props.selectedBusId, props.shape, zoomStep() < FAR_ZOOM));
+    createEffect(() => map() && updateGuide(instance));
 
     onCleanup(() => {
       buses.destroy();
@@ -171,7 +185,12 @@ export default function MapCanvas(props: {
 
   createEffect(() => {
     const m = map();
-    if (m) routeLayer.set(m, props.shape);
+    if (m) routeLayer.set(m, routeView());
+  });
+
+  createEffect(() => {
+    const m = map();
+    if (m) routeLayer.cut(m, routeView(), zoomStep());
   });
 
   createEffect(() => {
@@ -201,25 +220,11 @@ export default function MapCanvas(props: {
   createEffect(() => {
     const m = map();
     if (!m) return;
-    const shape = props.shape;
-    const onRoute = new Set(shape?.stops.map((s) => s.cluster) ?? []);
-    const footprints = new Map(stops.all.flatMap((s) => (s.footprint ? [[s.id, s.footprint] as const] : [])));
-    const route: StopItem[] = shape
-      ? shape.stops.map((s) => ({
-          id: s.stop_id,
-          name: s.stop_name,
-          lat: s.lat,
-          lng: s.lng,
-          station: s.station,
-          platform: s.platform,
-          footprint: footprints.get(s.cluster),
-        }))
-      : [];
+    const onRoute = new Set(props.shape?.stops.map((s) => s.cluster) ?? []);
     const rest = tooWide() ? [] : stops.all.filter((s) => !onRoute.has(s.id));
     const marks = {selectedId: props.selectedStopId, siblings: props.selectedSiblings};
 
-    stopsLayer.set(m, 'route-stops', route, {...marks, dim: false});
-    stopsLayer.set(m, 'stops', rest, {...marks, dim: onRoute.size > 0});
+    stopsLayer.set(m, rest, {...marks, dim: onRoute.size > 0});
     terminalsLayer.set(m, tooWide() ? [] : stops.all, {...marks, dim: onRoute.size > 0});
   });
 
@@ -249,6 +254,42 @@ export default function MapCanvas(props: {
     if (bus) m.easeTo({center: [bus.location.lng, bus.location.lat], offset: sheetOffset(m), duration: FOLLOW_MS});
   });
 
+  // edge arrow for an out-of-view bus
+  const [guide, setGuide] = createSignal<{x: number; y: number; angle: number; bus: Bus} | null>(null);
+
+  function updateGuide(m: MapLibreMap) {
+    const bus = props.selectedBusId ? props.buses.find((b) => b.id === props.selectedBusId) : undefined;
+    if (!bus) {
+      setGuide(null);
+      return;
+    }
+    const r = uncovered(m);
+    const p = m.project([bus.location.lng, bus.location.lat]);
+    if (p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom) {
+      setGuide(null);
+      return;
+    }
+    const cx = (r.left + r.right) / 2;
+    const cy = (r.top + r.bottom) / 2;
+    const dx = p.x - cx;
+    const dy = p.y - cy;
+    const t = Math.min(
+      (r.right - r.left) / 2 / Math.max(Math.abs(dx), 1e-6),
+      (r.bottom - r.top) / 2 / Math.max(Math.abs(dy), 1e-6)
+    );
+    setGuide({
+      x: Math.min(r.right - GUIDE_INSET, Math.max(r.left + GUIDE_INSET, cx + dx * t)),
+      y: Math.min(r.bottom - GUIDE_INSET, Math.max(r.top + GUIDE_INSET, cy + dy * t)),
+      angle: (Math.atan2(dx, -dy) * 180) / Math.PI,
+      bus,
+    });
+  }
+
+  function goToGuided(bus: Bus) {
+    const m = map();
+    if (m) m.easeTo({center: [bus.location.lng, bus.location.lat], offset: sheetOffset(m), duration: FOLLOW_MS});
+  }
+
   return (
     <>
       <div class={styles.map} ref={container} />
@@ -260,6 +301,25 @@ export default function MapCanvas(props: {
           <p class={styles.banner}>Acercá el mapa para ver las paradas</p>
         </Match>
       </Switch>
+      <Show when={guide()}>
+        {(g) => (
+          <button
+            class={styles.guide}
+            style={{
+              left: `${g().x}px`,
+              top: `${g().y}px`,
+              rotate: `${g().angle}deg`,
+              '--pin': companyPinVar(g().bus.company),
+              '--pin-outline': companyOutlineVar(g().bus.company),
+            }}
+            onClick={() => goToGuided(g().bus)}
+            aria-label='Ir al bus, fuera de la vista'>
+            <svg viewBox='0 0 12 12' width='28' height='28' aria-hidden='true'>
+              <path d='M6 0 L11 9 L6 7 L1 9 Z' />
+            </svg>
+          </button>
+        )}
+      </Show>
       {/* eslint-disable-next-line solid/no-innerhtml */}
       <p class={styles.credit} innerHTML={ATTRIBUTION} />
     </>

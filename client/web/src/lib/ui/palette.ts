@@ -47,6 +47,12 @@ export function companyVar(company: string | undefined): string {
   return slug ? `var(--company-${slug})` : 'var(--company-unknown)';
 }
 
+// palette adjustment, else company color
+export function companyPinVar(company: string | undefined): string {
+  const slug = companySlug(company);
+  return slug ? `var(--company-${slug}-pin, var(--company-${slug}))` : 'var(--company-unknown)';
+}
+
 export function companyOutlineVar(company: string | undefined): string {
   const slug = companySlug(company);
   return slug ? `var(--company-${slug}-outline)` : 'var(--text-hint)';

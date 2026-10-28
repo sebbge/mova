@@ -1,5 +1,5 @@
 .pin {
-  --pin-fill: oklch(from var(--pin) min(l, var(--pin-max-l)) c h);
+  --pin-fill: var(--pin);
   position: relative;
   display: grid;
   place-items: center;
@@ -9,9 +9,7 @@
   border: 0;
   background: none;
   cursor: pointer;
-  transition:
-    filter 0.15s ease,
-    opacity 0.2s ease;
+  transition: opacity 0.2s ease;
 
   @media (hover: hover) {
     &:hover .badge {
@@ -33,6 +31,30 @@
   opacity: 0.45;
 }
 
+.receded {
+  .badge,
+  .dir {
+    scale: 0.75;
+  }
+
+  .company {
+    display: none;
+  }
+}
+
+.selected {
+  .badge {
+    background: var(--map-outline);
+    color: var(--pin-fill);
+    border-color: var(--pin-fill);
+  }
+
+  .dir svg {
+    fill: var(--map-outline);
+    stroke: var(--pin-fill);
+  }
+}
+
 .badge {
   display: grid;
   place-items: center;
@@ -50,6 +72,7 @@
   border-radius: 12px;
   border: 2px solid var(--pin-outline);
   box-shadow: var(--shadow-pin);
+  transition: scale 0.2s var(--ease-out);
 
   /* long number widens the pin */
   &.long {
@@ -59,13 +82,20 @@
 
 .dir {
   position: absolute;
-  transition: rotate 0.6s ease-out;
-  inset: 0;
-  display: grid;
-  place-items: start center;
-  padding-top: 1px;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  transition:
+    rotate 0.6s ease-out,
+    scale 0.2s var(--ease-out);
 
+  /* arrow base (y = 9) at --reach */
   svg {
+    position: absolute;
+    left: -6px;
+    top: calc(-1 * var(--reach) - 9px);
+    transition: top 0.6s ease-out;
     fill: var(--pin-fill);
     stroke: var(--pin-outline);
     stroke-width: 1.2;
@@ -92,10 +122,10 @@
 }
 
 .still {
-  opacity: 0.6;
+  opacity: 0.8;
 
   &.dimmed {
-    opacity: 0.3;
+    opacity: 0.36;
   }
 
   .badge {
@@ -103,23 +133,11 @@
   }
 }
 
-.low_precision {
-  .badge,
-  .dir svg {
-    opacity: 0.72;
-  }
-
-  .badge {
-    border-style: dashed;
-  }
+/* dashed approximate, dotted imprecise */
+.low_precision .badge {
+  border-style: dashed;
 }
 
-.imprecise {
-  filter: blur(0.4px);
-
-  .badge {
-    opacity: 0.5;
-    border-style: dotted;
-    box-shadow: none;
-  }
+.imprecise .badge {
+  border-style: dotted;
 }

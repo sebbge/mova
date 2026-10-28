@@ -20,6 +20,17 @@ export class MapUrl {
     return new URLSearchParams(this.#search()).has(key);
   }
 
+  get search(): string {
+    return this.#search();
+  }
+
+  restore(search: string) {
+    const url = new URL(location.href);
+    url.search = search;
+    history.pushState(null, '', url);
+    this.#setSearch(url.search);
+  }
+
   select(params: Record<string, string | null>, replace = false) {
     const url = new URL(location.href);
     for (const [key, value] of Object.entries(params)) {

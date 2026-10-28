@@ -1,7 +1,8 @@
 import {Marker, type Map as MapLibreMap} from 'maplibre-gl';
-import {createComponent, createSignal, type Setter} from 'solid-js';
+import {createComponent, createRoot, createSignal, type Setter} from 'solid-js';
 import {render} from 'solid-js/web';
 import type {Bus, RouteShape} from '~/lib/api/types';
+import {follows} from '~/lib/domain/buses';
 import BusPin from './BusPin';
 
 type LngLat = [number, number];
@@ -10,6 +11,7 @@ interface Entry {
   marker: Marker;
   setBus: Setter<Bus>;
   setDimmed: Setter<boolean>;
+  setReceded: Setter<boolean>;
   dispose: () => void;
   from: LngLat;
   to: LngLat;
@@ -24,24 +26,29 @@ export class BusLayer {
   readonly #entries = new Map<string, Entry>();
   readonly #instant = matchMedia('(prefers-reduced-motion: reduce)').matches;
   #frame: number | null = null;
+  // one focus for every pin
+  readonly #focus = createRoot(() => createSignal<string | null>(null));
 
   constructor(
     private readonly map: MapLibreMap,
     private readonly onSelect?: (bus: Bus) => void
   ) {}
 
-  // focus or route fades the rest
-  render(buses: Bus[], focusId: string | null = null, shape: RouteShape | null = null) {
+  // far or with a route, off-route buses shrink and fade
+  render(buses: Bus[], focusId: string | null = null, shape: RouteShape | null = null, far = false) {
     const seen = new Set<string>();
     const now = performance.now();
+    this.#focus[1](focusId);
 
     for (const bus of buses) {
+      const offRoute = bus.id !== focusId && shape !== null && !follows(bus, shape);
+      if (focusId !== null && offRoute) continue;
       seen.add(bus.id);
-      const dimmed = focusId !== null ? bus.id !== focusId : shape !== null && !follows(bus, shape);
       const entry = this.#entries.get(bus.id) ?? this.#add(bus);
 
       entry.setBus(bus); // no remount, keeps the animation
-      entry.setDimmed(dimmed);
+      entry.setDimmed(offRoute);
+      entry.setReceded(bus.id !== focusId && (far || focusId !== null || shape !== null));
       entry.marker.getElement().style.zIndex = bus.id === focusId ? '1' : '';
       this.#moveTo(entry, [bus.location.lng, bus.location.lat], now);
     }
@@ -112,6 +119,8 @@ export class BusLayer {
     const element = document.createElement('div');
     const [bus, setBus] = createSignal(initial);
     const [dimmed, setDimmed] = createSignal(false);
+    const [receded, setReceded] = createSignal(false);
+    const [focus] = this.#focus;
     const onSelect = this.onSelect;
     const dispose = render(
       () =>
@@ -122,13 +131,28 @@ export class BusLayer {
           get dimmed() {
             return dimmed();
           },
+          get receded() {
+            return receded();
+          },
+          get selected() {
+            return focus() === bus().id;
+          },
           onSelect,
         }),
       element
     );
     const marker = new Marker({element}).setLngLat(at).addTo(this.map);
 
-    const entry = {marker, setBus, setDimmed, dispose, from: at, to: at, start: performance.now() - BusLayer.TWEEN_MS};
+    const entry = {
+      marker,
+      setBus,
+      setDimmed,
+      setReceded,
+      dispose,
+      from: at,
+      to: at,
+      start: performance.now() - BusLayer.TWEEN_MS,
+    };
     this.#entries.set(initial.id, entry);
     return entry;
   }
@@ -139,11 +163,4 @@ function metersApart(a: LngLat, b: LngLat): number {
   const dx = (a[0] - b[0]) * 111_320 * Math.cos(lat);
   const dy = (a[1] - b[1]) * 110_574;
   return Math.hypot(dx, dy);
-}
-
-// destination without a shape, else true
-function follows(bus: Bus, shape: RouteShape): boolean {
-  if (bus.shape_id) return bus.shape_id === shape.shape_id;
-  if (!bus.destination || !shape.headsign) return true;
-  return bus.destination.toUpperCase() === shape.headsign.toUpperCase();
 }

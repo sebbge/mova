@@ -13,8 +13,18 @@ const CONFIDENCE: Record<BusFreshness, string> = {
   imprecise: 'Última posición conocida',
 };
 
-export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
+export default function BusSheet(props: {
+  bus: Bus;
+  direction?: number; // 0 outbound, 1 inbound
+  onShowLine?: () => void;
+}) {
   const tint = () => companyTint(props.bus.company);
+  const sense = () => (props.direction === 0 ? 'Ida' : props.direction === 1 ? 'Vuelta' : undefined);
+  const subtitle = () => {
+    const origin = props.bus.origin;
+    if (!origin) return sense() ?? '';
+    return sense() ? `${sense()} desde ${origin}` : `desde ${origin}`;
+  };
   const split = () =>
     props.bus.company ? splitCompanyLine(props.bus.line, props.bus.company) : {line: props.bus.line};
   // operator delay vs position age
@@ -32,7 +42,7 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
       <div class={`${parts.band} ${styles.band}`} style={{'--sheet-header-bg': tint().header}}>
         <SheetHeader
           title={props.bus.destination ?? `Línea ${split().line}`}
-          subtitle={props.bus.origin ? `desde ${props.bus.origin}` : ''}
+          subtitle={subtitle()}
           lead={<LineLead line={split().line} company={split().company} />}
         />
       </div>
@@ -85,7 +95,7 @@ export default function BusSheet(props: {bus: Bus; onShowLine?: () => void}) {
         {(onShowLine) => (
           <div class={styles.footer} style={{'--list': tint().list}}>
             <button class={styles.line} onClick={() => onShowLine()()}>
-              Ver línea completa
+              Ver toda la línea
             </button>
           </div>
         )}

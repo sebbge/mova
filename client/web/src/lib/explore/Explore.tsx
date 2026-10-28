@@ -74,6 +74,7 @@ export default function Explore() {
               {(bus) => (
                 <BusSheet
                   bus={bus()}
+                  direction={selection.busDirection}
                   onShowLine={selection.lineId === bus().line ? () => selection.showLine() : undefined}
                 />
               )}

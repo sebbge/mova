@@ -1,4 +1,5 @@
 :root {
+  /* -pin: pin fill when the brand one reads badly under white */
   /* mvd */
   --company-cutcsa: oklch(0.67 0.09 200);
   --company-cutcsa-header: color-mix(in srgb, var(--company-cutcsa) var(--tint-header-mix), var(--tint-header-base));
@@ -10,7 +11,8 @@
   --company-come-list: color-mix(in srgb, var(--company-come) var(--tint-list-mix), var(--tint-list-base));
   --company-come-outline: hsl(from var(--company-come) h calc(s * 0.85) calc(l + 18));
 
-  --company-ucot: oklch(0.78 0.15 90);
+  --company-ucot: oklch(79% 0.15 90);
+  --company-ucot-pin: oklch(0.7 0.16 80);
   --company-ucot-header: color-mix(in srgb, var(--company-ucot) var(--tint-header-mix), var(--tint-header-base));
   --company-ucot-list: color-mix(in srgb, var(--company-ucot) var(--tint-list-mix), var(--tint-list-base));
   --company-ucot-outline: hsl(from var(--company-ucot) h calc(s * 0.85) calc(l + 18));
@@ -36,6 +38,7 @@
   --company-mdoturismo-outline: hsl(from var(--company-mdoturismo) h calc(s * 0.85) calc(l + 18));
 
   --company-micro: oklch(0.7446 0.0994 64.79);
+  --company-micro-pin: oklch(0.66 0.105 62);
   --company-micro-header: color-mix(in srgb, var(--company-micro) var(--tint-header-mix), var(--tint-header-base));
   --company-micro-list: color-mix(in srgb, var(--company-micro) var(--tint-list-mix), var(--tint-list-base));
   --company-micro-outline: hsl(from var(--company-micro) h calc(s * 0.85) calc(l + 18));
@@ -51,6 +54,7 @@
 
   /* uy */
   --company-cita: oklch(0.8 0.17 84);
+  --company-cita-pin: oklch(0.72 0.17 82);
   --company-cita-header: color-mix(in srgb, var(--company-cita) var(--tint-header-mix), var(--tint-header-base));
   --company-cita-list: color-mix(in srgb, var(--company-cita) var(--tint-list-mix), var(--tint-list-base));
   --company-cita-outline: hsl(from var(--company-cita) h calc(s * 0.85) calc(l + 18));
@@ -158,6 +162,7 @@
   --company-rutasdelsol-outline: hsl(from var(--company-rutasdelsol) h calc(s * 0.85) calc(l + 18));
 
   --company-tureste: oklch(0.7786 0.17 68.51);
+  --company-tureste-pin: oklch(0.7 0.17 64);
   --company-tureste-header: color-mix(in srgb, var(--company-tureste) var(--tint-header-mix), var(--tint-header-base));
   --company-tureste-list: color-mix(in srgb, var(--company-tureste) var(--tint-list-mix), var(--tint-list-base));
   --company-tureste-outline: hsl(from var(--company-tureste) h calc(s * 0.85) calc(l + 18));

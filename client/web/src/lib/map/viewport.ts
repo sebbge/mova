@@ -3,6 +3,12 @@ import {MercatorCoordinate, type LngLatBounds, type LngLatBoundsLike, type Map a
 export const STOPS_MAX_KM2 = 400;
 
 const WIDE = 768; // px, sheet stops covering the map
+const PANEL = 396; // px, sheet width + margin
+
+// maplibre uses 512 px tiles
+export function metersPerPixel(zoom: number, lat: number): number {
+  return (40_075_016.686 * Math.cos((lat * Math.PI) / 180)) / (512 * 2 ** zoom);
+}
 
 export function viewportKm2(b: LngLatBounds): number {
   const midLat = (((b.getSouth() + b.getNorth()) / 2) * Math.PI) / 180;
@@ -24,6 +30,12 @@ export function overlaps(a: LngLatBounds, b: LngLatBounds): boolean {
 export function sheetOffset(map: MapLibreMap): [number, number] {
   const {width, height} = map.getCanvas().getBoundingClientRect();
   return width >= WIDE ? [0, 0] : [0, -height * 0.22];
+}
+
+// top half on phone, right of panel on desktop
+export function uncovered(map: MapLibreMap): {left: number; top: number; right: number; bottom: number} {
+  const {clientWidth: w, clientHeight: h} = map.getContainer();
+  return w >= WIDE ? {left: PANEL, top: 0, right: w, bottom: h} : {left: 0, top: 0, right: w, bottom: h * 0.52};
 }
 
 // never zooms out

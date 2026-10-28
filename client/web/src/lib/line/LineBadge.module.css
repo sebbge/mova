@@ -8,7 +8,7 @@
 
 .md {
   min-width: 3.25rem;
-  padding: var(--space-1) var(--space-2);
+  padding: 0 var(--space-2);
   font-size: var(--text-lg);
 }
 
@@ -20,8 +20,7 @@
 
 .pill {
   background: var(--badge);
-  /* ink by lightness, AA on every color */
-  color: oklch(from var(--badge) clamp(0.2, (0.6 - l) * 1000, 1) 0 0);
+  color: var(--service-header-on);
   border-radius: var(--radius-sm);
 }
 

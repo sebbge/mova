@@ -1,7 +1,7 @@
 import {createEffect, createSignal, on, Show, untrack} from 'solid-js';
 import type {Bus, BusFreshness} from '~/lib/api/types';
 import {splitCompanyLine} from '~/lib/format';
-import {companyOutlineVar, companyVar} from '~/lib/ui/palette';
+import {companyOutlineVar, companyPinVar} from '~/lib/ui/palette';
 import styles from './BusPin.module.css';
 
 const PRECISION: Record<BusFreshness, string> = {
@@ -10,8 +10,14 @@ const PRECISION: Record<BusFreshness, string> = {
   imprecise: ', posición imprecisa',
 };
 
-export default function BusPin(props: {bus: Bus; dimmed?: boolean; onSelect?: (bus: Bus) => void}) {
-  const hasDirection = () => props.bus.bearing_deg != null && !props.bus.still;
+export default function BusPin(props: {
+  bus: Bus;
+  dimmed?: boolean; // off route, or another bus in focus
+  receded?: boolean; // another bus in focus, 44px tap
+  selected?: boolean; // open bus
+  onSelect?: (bus: Bus) => void;
+}) {
+  const hasDirection = () => props.bus.bearing_deg != null;
   const parts = () =>
     props.bus.company ? splitCompanyLine(props.bus.line, props.bus.company) : {line: props.bus.line};
   const number = () => parts().line;
@@ -31,6 +37,14 @@ export default function BusPin(props: {bus: Bus; dimmed?: boolean; onSelect?: (b
     )
   );
 
+  // ellipse from the number length, no dom measure
+  const reach = () => {
+    const n = number().length;
+    const a = Math.max(14, (12 + n * (n > 4 ? 6.6 : 7.2)) / 2);
+    const t = (rotation() * Math.PI) / 180;
+    return 1 / Math.hypot(Math.sin(t) / a, Math.cos(t) / 14) + 3;
+  };
+
   // or the map reads a background click
   const select = (e: MouseEvent) => {
     e.stopPropagation();
@@ -40,13 +54,18 @@ export default function BusPin(props: {bus: Bus; dimmed?: boolean; onSelect?: (b
   return (
     <button
       class={`${styles.pin} ${styles[props.bus.freshness] ?? ''}`}
-      classList={{[styles.still]: props.bus.still, [styles.dimmed]: Boolean(props.dimmed)}}
-      style={{'--pin': companyVar(props.bus.company), '--pin-outline': companyOutlineVar(props.bus.company)}}
+      classList={{
+        [styles.still]: props.bus.still,
+        [styles.dimmed]: Boolean(props.dimmed),
+        [styles.receded]: Boolean(props.receded),
+        [styles.selected]: Boolean(props.selected),
+      }}
+      style={{'--pin': companyPinVar(props.bus.company), '--pin-outline': companyOutlineVar(props.bus.company)}}
       onClick={select}
       title={`${props.bus.line} ${props.bus.destination ?? ''} - ${props.bus.company}`}
       aria-label={`Bus de la línea ${props.bus.line}${PRECISION[props.bus.freshness]}`}>
       <Show when={hasDirection()}>
-        <span class={styles.dir} style={{rotate: `${rotation()}deg`}} aria-hidden='true'>
+        <span class={styles.dir} style={{rotate: `${rotation()}deg`, '--reach': `${reach()}px`}} aria-hidden='true'>
           <svg viewBox='0 0 12 12' width='12' height='12'>
             <path d='M6 0 L11 9 L6 7 L1 9 Z' />
           </svg>

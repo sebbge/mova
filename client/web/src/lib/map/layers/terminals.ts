@@ -3,7 +3,7 @@ import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import type {StopItem} from '~/lib/api/types';
 import {providerInfo, serviceOf, type Service} from '~/lib/domain/providers';
 import {serviceColor} from '~/lib/map/paint';
-import type {StopsMarks} from './stops';
+import {STOP_OPACITY, type StopsMarks} from './stops';
 
 const SOURCE = 'terminals';
 
@@ -36,7 +36,7 @@ export const terminalsLayer = {
       paint: {
         'line-color': color,
         'line-width': ['case', ['get', 'selected'], 3, 1.5],
-        'line-opacity': ['case', ['get', 'dim'], 0.45, ['get', 'muted'], 0.75, 1],
+        'line-opacity': STOP_OPACITY,
       },
     });
   },

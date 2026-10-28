@@ -8,8 +8,6 @@
   --tint-header-mix: 70%;
   --tint-list-mix: 6%;
   --tint-pin-l: 0.08;
-  /* pin fill lightness cap for AA */
-  --pin-max-l: 0.55;
 
   --service-header-on: oklch(1 0 0);
   --service-header-on-muted: oklch(0.87 0.026 268.82);
@@ -36,6 +34,7 @@
   --tint-header-mix: 24%;
   --tint-list-mix: 9%;
   --tint-pin-l: 0;
+  --service-urban-pin: var(--service-urban);
 
   --service-header-on: oklch(1 0 0);
   --service-header-on-muted: oklch(0.7492 0.0234 263.16);
@@ -74,7 +73,8 @@
   --service-neutral-list: hsl(from var(--service-neutral) h calc(s * var(--tint-list-s)) var(--tint-list-l));
   --service-neutral-outline: hsl(from var(--service-neutral) h calc(s * 0.85) 60%);
 
-  --service-urban-pin: oklch(from var(--service-urban) calc(l + var(--tint-pin-l)) c h);
+  /* pin rises to the others' lightness */
+  --service-urban-pin: oklch(from var(--service-urban) 0.55 0.14 h);
   --service-suburban-pin: oklch(from var(--service-suburban) calc(l + var(--tint-pin-l)) c h);
   --service-inter-pin: var(--service-inter);
   --service-neutral-pin: var(--service-neutral);

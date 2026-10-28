@@ -23,25 +23,36 @@ export function stopPinImage(selected: boolean, services: readonly Service[], si
   const side = size - margin * 2;
   const shape = () => roundedRect(ctx, margin, margin, side, side, side * 0.26);
 
+  // selected inverted
   byService(ctx, shape, margin, side, services, (service) => {
-    ctx.fillStyle = pinColor(service);
+    ctx.fillStyle = selected ? outline() : pinColor(service);
     ctx.fill();
   });
 
   ctx.lineWidth = selected ? size * 0.07 : size * 0.038;
-  byService(ctx, shape, margin, side, services, (service) => {
-    ctx.strokeStyle = pinOutline(service);
-    ctx.stroke();
-  });
+  byService(
+    ctx,
+    shape,
+    margin,
+    side,
+    services,
+    (service) => {
+      ctx.strokeStyle = pinOutline(service);
+      ctx.stroke();
+    },
+    ctx.lineWidth
+  );
 
   const scale = (side * 0.62) / Math.max(vbW, vbH);
-  ctx.save();
-  ctx.translate(size / 2 - (vbW * scale) / 2, size / 2 - (vbH * scale) / 2);
-  ctx.scale(scale, scale);
-  ctx.translate(-vbX, -vbY);
-  ctx.fillStyle = outline();
-  ctx.fill(busPath);
-  ctx.restore();
+  byService(ctx, shape, margin, side, services, (service) => {
+    ctx.save();
+    ctx.translate(size / 2 - (vbW * scale) / 2, size / 2 - (vbH * scale) / 2);
+    ctx.scale(scale, scale);
+    ctx.translate(-vbX, -vbY);
+    ctx.fillStyle = selected ? pinColor(service) : outline();
+    ctx.fill(busPath);
+    ctx.restore();
+  });
 
   return ctx.getImageData(0, 0, size, size);
 }
@@ -87,7 +98,8 @@ function byService(
   margin: number,
   side: number,
   [first, second]: readonly Service[],
-  draw: (service: Service) => void
+  draw: (service: Service) => void,
+  stroke = 0
 ): void {
   if (!first) return;
   if (!second) {
@@ -95,10 +107,17 @@ function byService(
     draw(first);
     return;
   }
-  halved(ctx, shape, margin, side, (half) => {
-    shape();
-    draw(half === 'upper' ? first : second);
-  });
+  halved(
+    ctx,
+    shape,
+    margin,
+    side,
+    (half) => {
+      shape();
+      draw(half === 'upper' ? first : second);
+    },
+    stroke
+  );
 }
 
 // first service on top, as the sheet tabs
@@ -107,32 +126,38 @@ function halved(
   shape: () => void,
   margin: number,
   side: number,
-  draw: (half: 'upper' | 'lower') => void
+  draw: (half: 'upper' | 'lower') => void,
+  stroke = 0
 ): void {
-  const end = margin + side;
+  // grown half a stroke, or the outline looks thinner
+  const pad = stroke / 2;
+  const start = margin - pad;
+  const end = margin + side + pad;
   const halves: ['upper' | 'lower', [number, number][]][] = [
     [
       'upper',
       [
-        [margin, margin],
-        [end, margin],
-        [margin, end],
+        [start, start],
+        [end, start],
+        [start, end],
       ],
     ],
     [
       'lower',
       [
-        [end, margin],
+        [end, start],
         [end, end],
-        [margin, end],
+        [start, end],
       ],
     ],
   ];
 
   for (const [half, points] of halves) {
     ctx.save();
-    shape();
-    ctx.clip(); // keeps the rounded corners
+    if (!stroke) {
+      shape();
+      ctx.clip(); // keeps the rounded corners
+    }
 
     ctx.beginPath();
     for (const [x, y] of points) ctx.lineTo(x, y);
@@ -142,6 +167,35 @@ function halved(
     draw(half);
     ctx.restore();
   }
+}
+
+// 64 image px, 32 on screen
+export function routeTerminalImage(letter: 'O' | 'D', color: string, selected: boolean, size = 64): ImageData | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const ring = size * 0.09;
+  const side = size - ring;
+  const [fill, ink] = selected ? [color, outline()] : [outline(), color];
+
+  roundedRect(ctx, ring / 2, ring / 2, side, side, side * 0.28);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = ring;
+  ctx.strokeStyle = ink;
+  ctx.stroke();
+
+  ctx.fillStyle = ink;
+  ctx.font = `700 ${Math.round(size * 0.5)}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(letter, size / 2, size / 2 + size * 0.03);
+
+  return ctx.getImageData(0, 0, size, size);
 }
 
 function roundedRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number): void {

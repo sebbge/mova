@@ -1,6 +1,7 @@
-import {createEffect, createSignal, onCleanup, type Accessor, type Setter} from 'solid-js';
+import {createEffect, createSignal, onCleanup, untrack, type Accessor, type Setter} from 'solid-js';
 import type {Bus, BusLeg} from '~/lib/api/types';
 import {RegionBuses} from '~/lib/bus/RegionBuses';
+import {follows} from '~/lib/domain/buses';
 import {hasLines, providerOf} from '~/lib/domain/providers';
 import {regionsShowingAllBuses} from '~/lib/domain/regions';
 import {LineFeed} from '~/lib/line/LineFeed';
@@ -10,6 +11,17 @@ import {TripPlanner} from './TripPlanner';
 
 const P = {stop: 'parada', line: 'linea', variant: 'v', direction: 'd', shape: 's', bus: 'bus'} as const;
 const LINE_CLEARED = {[P.line]: null, [P.variant]: null, [P.direction]: null, [P.shape]: null};
+
+// back returns to it before the line
+interface BusStep {
+  bus: string;
+  search: string;
+  busFromStop: boolean;
+  lineFromBus: string | null;
+  lineCompany: string | undefined;
+}
+
+const reportedAt = (bus: Bus) => (bus.timestamp ? Date.parse(bus.timestamp) || 0 : 0);
 
 // self-corrections use replace, or back loops
 export class MapSelection {
@@ -32,6 +44,11 @@ export class MapSelection {
   readonly #setPinnedBus: Setter<string | null>;
   readonly #liveRegions: Accessor<string>; // stable string
   readonly #setLiveRegions: Setter<string>;
+  readonly #busTrail: Accessor<BusStep[]>;
+  readonly #setBusTrail: Setter<BusStep[]>;
+  // keeps every bus's latest position
+  readonly #latest: Accessor<Record<string, Bus>>;
+  readonly #setLatest: Setter<Record<string, Bus>>;
 
   constructor(private readonly url: MapUrl) {
     this.planner = new TripPlanner(url, () => this.childOpen);
@@ -42,15 +59,28 @@ export class MapSelection {
     [this.#lineFromBus, this.#setLineFromBus] = createSignal<string | null>(null);
     [this.#liveRegions, this.#setLiveRegions] = createSignal('');
     [this.#pinnedBus, this.#setPinnedBus] = createSignal<string | null>(null);
+    [this.#busTrail, this.#setBusTrail] = createSignal<BusStep[]>([]);
+    [this.#latest, this.#setLatest] = createSignal<Record<string, Bus>>({});
+
+    createEffect(() => this.#remember(this.stops.buses));
+    createEffect(() => this.#remember(this.line.buses));
+    createEffect(() => this.#remember(this.regionBuses.buses));
+
+    // trail: close empties, back pops
+    createEffect(() => {
+      const id = this.busId;
+      untrack(() => {
+        if (!id) this.#setBusTrail([]);
+        else if (this.#busTrail().at(-1)?.bus === id) this.#setBusTrail((trail) => trail.slice(0, -1));
+      });
+    });
 
     createEffect(() => onCleanup(this.regionBuses.follow(this.#liveRegions()) ?? (() => {})));
 
     createEffect(() => this.stops.follow(this.stopId));
     onCleanup(() => this.stops.close());
     createEffect(() => onCleanup(this.line.followVariants(this.lineId) ?? (() => {})));
-    createEffect(() =>
-      onCleanup(this.line.followBuses(this.routeId ? providerOf(this.routeId) : null, this.lineId) ?? (() => {}))
-    );
+    createEffect(() => onCleanup(this.line.followBuses(this.#lineProvider(), this.lineId) ?? (() => {})));
     createEffect(() => {
       const shapeRef = this.shapeRef;
       const stop = shapeRef
@@ -141,12 +171,18 @@ export class MapSelection {
   get selectedBus(): Bus | null {
     const id = this.busId;
     if (!id) return null;
-    return (
+    const found =
       this.#lineBuses().find((b) => b.id === id) ??
       this.stops.buses.find((b) => b.id === id) ??
-      this.regionBuses.buses.find((b) => b.id === id) ??
-      null
-    );
+      this.regionBuses.buses.find((b) => b.id === id);
+    return found ? this.#freshest(found) : null;
+  }
+
+  // only if it follows the drawn line
+  get busDirection(): number | undefined {
+    const bus = this.selectedBus;
+    const shape = this.line.shape;
+    return bus && shape && this.lineId === bus.line && follows(bus, shape) ? shape.direction_id : undefined;
   }
 
   // selection first, region buses behind
@@ -155,7 +191,7 @@ export class MapSelection {
     const selected = this.selectedBus;
     const focused = selected && !own.some((b) => b.id === selected.id) ? [...own, selected] : own;
     const ids = new Set(focused.map((b) => b.id));
-    return [...focused, ...this.regionBuses.buses.filter((b) => !ids.has(b.id))];
+    return [...focused, ...this.regionBuses.buses.filter((b) => !ids.has(b.id))].map((b) => this.#freshest(b));
   }
 
   get routeCompany(): string | undefined {
@@ -181,7 +217,7 @@ export class MapSelection {
 
   // no browser history
   get back(): (() => void) | undefined {
-    if (this.busId) return () => this.closeBus();
+    if (this.busId) return this.#busTrail().length > 0 ? () => this.#backToBus() : () => this.closeBus();
     const fromBus = this.#lineFromBus();
     if (this.lineId && fromBus) {
       return () => {
@@ -210,6 +246,17 @@ export class MapSelection {
   // first tap opens, then pins/unpins the camera
   tapBus(bus: Bus) {
     if (bus.id !== this.busId) {
+      const open = this.busId;
+      if (open) {
+        const step: BusStep = {
+          bus: open,
+          search: this.url.search,
+          busFromStop: this.#busFromStop(),
+          lineFromBus: this.#lineFromBus(),
+          lineCompany: this.#lineCompany(),
+        };
+        this.#setBusTrail((trail) => [...trail, step]);
+      }
       this.#setPinnedBus(null);
       this.openBus(bus);
       return;
@@ -219,22 +266,28 @@ export class MapSelection {
 
   // brings its line
   openBus(bus: Bus) {
-    const provider = this.regionBuses.providerOf(bus.id) ?? (this.stopId ? providerOf(this.stopId) : undefined);
+    // fb line's provider, or the bus list empties
+    const provider =
+      this.regionBuses.providerOf(bus.id) ??
+      this.#lineProvider() ??
+      (this.stopId ? providerOf(this.stopId) : undefined);
     if (provider && !hasLines(provider)) {
       this.openBusOnly(bus);
       return;
     }
     const fromStop = this.lineId !== bus.line;
     this.#setBusFromStop(fromStop);
-    if (!fromStop) {
+    // same trace: only the bus changes
+    const shape = this.line.shape;
+    if (!fromStop && (!shape || follows(bus, shape))) {
       this.url.select({[P.bus]: bus.id});
       return;
     }
-    const shape = bus.shape_id && provider ? `${provider}-${bus.shape_id}` : null;
-    this.#setDirectionHint(shape ? null : (bus.destination ?? null));
+    const shapeRef = bus.shape_id && provider ? `${provider}-${bus.shape_id}` : null;
+    this.#setDirectionHint(shapeRef ? null : (bus.destination ?? null));
     this.#setLineCompany(bus.company);
     this.#setLineFromBus(null);
-    this.url.select({...LINE_CLEARED, [P.line]: bus.line, [P.shape]: shape, [P.bus]: bus.id});
+    this.url.select({...LINE_CLEARED, [P.line]: bus.line, [P.shape]: shapeRef, [P.bus]: bus.id});
   }
 
   // provider without lines
@@ -306,5 +359,37 @@ export class MapSelection {
 
   #lineBuses(): Bus[] {
     return this.lineId ? this.line.buses : this.stops.buses;
+  }
+
+  // fb while s arrives before v
+  #lineProvider(): string | null {
+    const ref = this.routeId ?? this.shapeRef;
+    return ref ? providerOf(ref) : null;
+  }
+
+  #backToBus() {
+    const step = this.#busTrail().at(-1);
+    if (!step) return;
+    this.#setBusFromStop(step.busFromStop);
+    this.#setLineFromBus(step.lineFromBus);
+    this.#setLineCompany(step.lineCompany);
+    this.url.restore(step.search);
+  }
+
+  #remember(list: Bus[]) {
+    untrack(() => {
+      const latest = this.#latest();
+      let next: Record<string, Bus> | null = null;
+      for (const bus of list) {
+        const known = (next ?? latest)[bus.id];
+        if (known === bus || (known && reportedAt(known) > reportedAt(bus))) continue;
+        (next ??= {...latest})[bus.id] = bus;
+      }
+      if (next) this.#setLatest(next);
+    });
+  }
+
+  #freshest(bus: Bus): Bus {
+    return this.#latest()[bus.id] ?? bus;
   }
 }
