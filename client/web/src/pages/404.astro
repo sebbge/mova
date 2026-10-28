@@ -1,0 +1,53 @@
+---
+import Base from '~/layouts/Base.astro';
+import Header from '~/lib/ui/Header.astro';
+import {href} from '~/lib/ui/href';
+import MapLink from '~/lib/ui/MapLink.astro';
+---
+
+<Base title='No encontrada | Bondi' noindex>
+  <Header back='/' />
+
+  <main>
+    <h1>No encontramos esta página</h1>
+    <p>Puede que la parada o la línea haya cambiado de número, o que el enlace esté mal escrito.</p>
+
+    <nav aria-label='Seguir desde acá'>
+      <a class='home' href='/'>
+        Buscar una línea
+      </a>
+      <MapLink href={href.map()} title='Ver el mapa' sub='Paradas cercanas y buses en vivo' />
+    </nav>
+  </main>
+</Base>
+
+<style>
+  main {
+    max-width: var(--content-max);
+    margin: 0 auto;
+    padding: var(--space-8) var(--gutter);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  p {
+    color: var(--text-secondary);
+  }
+
+  nav {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+  }
+
+  .home {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+</style>

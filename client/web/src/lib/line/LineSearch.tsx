@@ -1,13 +1,20 @@
 import {createMemo, createSignal, For, Match, onCleanup, Show, Switch} from 'solid-js';
 import {api} from '~/lib/api/client';
 import type {BusRoute} from '~/lib/api/types';
+import {regionById} from '~/lib/domain/regions';
 import {href} from '~/lib/ui/href';
 import LineBadge from './LineBadge';
 import styles from './LineSearch.module.css';
 
 const DEBOUNCE_MS = 250;
 
-export default function LineSearch(props: {region: string}) {
+// no area -> map
+function lineHref(short: string, area: string | undefined): string {
+  const region = regionById(area);
+  return region ? href.line(region.slug, short) : href.map({linea: short});
+}
+
+export default function LineSearch() {
   const [term, setTerm] = createSignal('');
   const [results, setResults] = createSignal<BusRoute[]>([]);
   const [status, setStatus] = createSignal<'idle' | 'loading' | 'error'>('idle');
@@ -66,7 +73,6 @@ export default function LineSearch(props: {region: string}) {
         onInput={(e) => onInput(e.currentTarget.value)}
         placeholder='Buscá una línea: 522, 183…'
         aria-label='Buscar línea'
-        inputmode='numeric'
       />
 
       <Switch>
@@ -81,7 +87,7 @@ export default function LineSearch(props: {region: string}) {
             <For each={lines()}>
               {(line) => (
                 <li>
-                  <a class={styles.item} href={href.line(props.region, line.short)}>
+                  <a class={styles.item} href={lineHref(line.short, line.variants[0].area)}>
                     <LineBadge line={line.short} />
                     <span class={styles.names}>
                       {line.variants[0].route_long_name ?? ''}

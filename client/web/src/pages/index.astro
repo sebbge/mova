@@ -1,9 +1,10 @@
 ---
 import Base from '~/layouts/Base.astro';
-import {DEFAULT_REGION, REGIONS} from '~/lib/domain/regions';
+import {REGIONS} from '~/lib/domain/regions';
 import LineSearch from '~/lib/line/LineSearch';
 import Header from '~/lib/ui/Header.astro';
 import {href} from '~/lib/ui/href';
+import MapLink from '~/lib/ui/MapLink.astro';
 ---
 
 <Base
@@ -14,7 +15,8 @@ import {href} from '~/lib/ui/href';
     <section class='hero'>
       <h1>¿Qué bondi te lleva?</h1>
       <p class='lede'>Horarios, recorridos y llegadas en tiempo real del transporte público uruguayo.</p>
-      <LineSearch client:idle region={DEFAULT_REGION.slug} />
+      <LineSearch client:idle />
+      <MapLink href={href.map()} title='Ver el mapa' sub='Paradas cercanas y buses en vivo' />
     </section>
 
     <section class='regions'>
@@ -27,8 +29,8 @@ import {href} from '~/lib/ui/href';
         ))}
       </ul>
       <p class='note'>
-        Montevideo y el área metropolitana, con todas sus líneas. En el resto del país, por ahora, los ómnibus
-        interdepartamentales.
+        Montevideo y el área metropolitana con todas sus líneas, los interdepartamentales de todo el país, y Maldonado,
+        Colonia, Paysandú y Rivera con sus buses en vivo.
       </p>
     </section>
   </main>
@@ -70,7 +72,9 @@ import {href} from '~/lib/ui/href';
   }
 
   .regions a {
-    display: inline-block;
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
     padding: var(--space-2) var(--space-4);
     background: var(--surface);
     border: 1px solid var(--divider);

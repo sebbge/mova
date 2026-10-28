@@ -49,10 +49,10 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
   <main>
     <div class='head'>
       <LineBadge line={line} />
-      <h1>{longName}</h1>
+      <h1>{longName || `Línea ${line}`}</h1>
     </div>
 
-    <MapLink href={href.map({linea: line})} title='Ver en el mapa' sub='Recorrido y buses en vivo' />
+    <MapLink href={href.map({linea: line})} title='Ver en el mapa' sub='Recorrido y buses en vivo' data-map-link />
 
     {shapes.length === 0 ? (
       <p class='note'>No encontramos recorridos para la línea {line}.</p>
@@ -71,7 +71,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
         )}
 
         {shapes.map((s) => (
-          <section data-route={key(s)}>
+          <section data-route={key(s)} data-map={href.map({linea: line, v: s.route_id, d: String(s.direction_id)})}>
             <h2>
               Hacia {headsign(s, ['ida', 'vuelta'])} · {s.stops.length} paradas
             </h2>
@@ -101,6 +101,8 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
   const active = sections.some((s) => s.dataset.route === wanted) ? wanted : sections[0]?.dataset.route;
 
   for (const section of sections) section.hidden = section.dataset.route !== active;
+  const map = sections.find((s) => s.dataset.route === active)?.dataset.map;
+  if (map) document.querySelector('[data-map-link]')?.setAttribute('href', map);
   for (const link of document.querySelectorAll<HTMLElement>('[data-route-link]')) {
     if (link.dataset.routeLink === active) link.setAttribute('aria-current', 'true');
   }
@@ -146,6 +148,9 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
   }
 
   nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
     padding: var(--space-2) var(--space-3);
     background: var(--surface);
     border: 1px solid var(--divider);
