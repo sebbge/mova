@@ -35,6 +35,10 @@
       background: color-mix(in srgb, var(--service-header-on) 14%, transparent);
     }
   }
+
+  &:active {
+    background: color-mix(in srgb, var(--service-header-on) 14%, transparent);
+  }
 }
 
 .body {
@@ -107,4 +111,15 @@
   .narrow {
     width: 40%;
   }
+}
+
+/* press feedback */
+.chip,
+.action {
+  transition: transform 160ms var(--ease-out);
+}
+
+.chip:active,
+.action:active {
+  transform: scale(0.97);
 }

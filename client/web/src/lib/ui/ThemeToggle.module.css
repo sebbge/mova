@@ -17,6 +17,10 @@
       background: color-mix(in srgb, var(--brand-contrast) 16%, transparent);
     }
   }
+
+  &:active {
+    background: color-mix(in srgb, var(--brand-contrast) 16%, transparent);
+  }
 }
 
 .sun,

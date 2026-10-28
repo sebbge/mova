@@ -33,9 +33,23 @@ const {title, sub, ...attrs} = Astro.props;
     }
   }
 
+  a:active {
+    text-decoration: none;
+    border-color: var(--brand);
+  }
+
   .sub {
     color: var(--text-secondary);
     font-weight: 400;
     font-size: var(--text-sm);
+  }
+
+  /* press feedback */
+  a {
+    transition: transform 160ms var(--ease-out);
+  }
+
+  a:active {
+    transform: scale(0.98);
   }
 </style>

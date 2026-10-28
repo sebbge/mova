@@ -19,6 +19,11 @@
       text-decoration: none;
     }
   }
+
+  &:active {
+    background: var(--row-hover, color-mix(in srgb, var(--text-primary) 4%, transparent));
+    text-decoration: none;
+  }
 }
 
 /* same height with or without company */

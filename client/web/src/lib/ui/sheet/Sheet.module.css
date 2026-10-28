@@ -9,15 +9,8 @@
   background: var(--sheet);
   border-radius: var(--radius) var(--radius) 0 0;
   box-shadow: var(--shadow-sheet);
-  transition: height 0.22s cubic-bezier(0.2, 0, 0, 1);
+  transition: height 0.22s var(--ease-drawer);
   overflow: hidden;
-  animation: rise 220ms ease-out;
-}
-
-@keyframes rise {
-  from {
-    translate: 0 100%;
-  }
 }
 
 .dragging {
@@ -42,6 +35,10 @@
     &:hover {
       background: color-mix(in srgb, currentColor 16%, transparent);
     }
+  }
+
+  &:active {
+    background: color-mix(in srgb, currentColor 16%, transparent);
   }
 }
 

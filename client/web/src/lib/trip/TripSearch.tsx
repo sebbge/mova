@@ -3,6 +3,7 @@ import {createStore} from 'solid-js/store';
 import {api} from '~/lib/api/client';
 import type {PlaceHit, StopHit, TravelMode} from '~/lib/api/types';
 import {fullStopName, localIso} from '~/lib/format';
+import {fly, slide, transition} from '~/lib/ui/motion';
 import type {Endpoint} from './endpoint';
 import {CATEGORIES, fareProfile, PAYMENTS} from './profile';
 import type {Place} from './TripFeed';
@@ -140,7 +141,10 @@ export default function TripSearch(props: {
 
   return (
     <div
-      ref={panel}
+      ref={(el) => {
+        panel = el;
+        transition(el, fly('8px'), {enter: 200, leave: 120});
+      }}
       class={styles.panel}
       role='dialog'
       aria-modal='true'
@@ -217,7 +221,10 @@ export default function TripSearch(props: {
                   </svg>
                 </button>
                 <Show when={fareOpen()}>
-                  <div id='fare-options' class={styles.fareOptions}>
+                  <div
+                    id='fare-options'
+                    ref={(el) => transition(el, slide, {enter: 180, leave: 180})}
+                    class={styles.fareOptions}>
                     <div class={styles.chips}>
                       <For each={PAYMENTS}>
                         {(p) => (

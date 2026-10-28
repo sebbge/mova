@@ -69,6 +69,10 @@
       background: var(--scaffold);
     }
   }
+
+  &:active {
+    background: var(--scaffold);
+  }
 }
 
 .dot {
@@ -125,6 +129,10 @@
       &:hover {
         background: var(--scaffold);
       }
+    }
+
+    &:active {
+      background: var(--scaffold);
     }
   }
 }
@@ -241,4 +249,17 @@
   color: var(--brand-contrast);
   font-weight: 600;
   cursor: pointer;
+}
+
+/* press feedback */
+.chip,
+.done,
+.swap {
+  transition: transform 160ms var(--ease-out);
+}
+
+.chip:active,
+.done:active,
+.swap:active {
+  transform: scale(0.97);
 }

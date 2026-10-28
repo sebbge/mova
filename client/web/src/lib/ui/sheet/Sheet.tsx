@@ -1,9 +1,12 @@
 import {createSignal, onCleanup, onMount, Show, type JSX} from 'solid-js';
+import {transition, fly} from '~/lib/ui/motion';
 import {SheetDragContext, type SheetDrag} from './context';
 import styles from './Sheet.module.css';
 
 const SNAPS = [0.22, 0.48, 0.88]; // share of screen height: peek, half, full
 const DRAG_THRESHOLD = 0.06; // share of screen height
+const FLICK_PX = 12;
+const FLICK_SPEED = 0.5; // px/ms
 
 export default function Sheet(props: {
   open: boolean;
@@ -22,17 +25,22 @@ export default function Sheet(props: {
     setDragging(true);
     setDragOffset(0);
     const startY = e.clientY;
+    const startAt = performance.now();
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
 
     const move = (ev: PointerEvent) => setDragOffset(ev.clientY - startY);
-    const up = () => {
+    const release = () => {
       target.releasePointerCapture(e.pointerId);
       removeEventListener('pointermove', move);
-      removeEventListener('pointerup', up);
+      removeEventListener('pointerup', release);
 
+      const offset = dragOffset();
       const threshold = innerHeight * DRAG_THRESHOLD;
-      const next = snap() + (dragOffset() > threshold ? -1 : dragOffset() < -threshold ? 1 : 0);
+      const flick = Math.abs(offset) > FLICK_PX && Math.abs(offset) / (performance.now() - startAt) > FLICK_SPEED;
+      const lower = offset > threshold || (flick && offset > 0);
+      const raise = offset < -threshold || (flick && offset < 0);
+      const next = snap() + (lower ? -1 : raise ? 1 : 0);
       if (next < 0 && !props.sticky) props.onClose?.();
       setSnap(clampSnap(next));
       setDragging(false);
@@ -40,7 +48,7 @@ export default function Sheet(props: {
     };
 
     addEventListener('pointermove', move);
-    addEventListener('pointerup', up);
+    addEventListener('pointerup', release);
   }
 
   const drag: SheetDrag = {
@@ -69,6 +77,7 @@ export default function Sheet(props: {
   return (
     <Show when={props.open}>
       <aside
+        ref={(el) => transition(el, fly('100%', 1), {enter: 240, leave: 160})}
         class={styles.sheet}
         classList={{[styles.dragging]: dragging()}}
         style={{

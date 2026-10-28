@@ -108,4 +108,8 @@
       background: var(--service-divider);
     }
   }
+
+  &:active {
+    background: var(--service-divider);
+  }
 }

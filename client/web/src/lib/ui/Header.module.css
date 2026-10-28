@@ -30,6 +30,10 @@
       background: color-mix(in srgb, var(--brand-contrast) 16%, transparent);
     }
   }
+
+  &:active {
+    background: color-mix(in srgb, var(--brand-contrast) 16%, transparent);
+  }
 }
 
 /* darker, keeps white contrast */
@@ -54,6 +58,11 @@
       text-decoration: none;
       background: oklch(from var(--brand-deep) calc(l - 0.1) c h);
     }
+  }
+
+  &:active {
+    text-decoration: none;
+    background: oklch(from var(--brand-deep) calc(l - 0.1) c h);
   }
 
   span {

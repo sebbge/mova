@@ -77,6 +77,11 @@
       }
     }
 
+    &:active:not(:disabled) {
+      background: var(--service-hover);
+      color: var(--service-on);
+    }
+
     &.active {
       border-left-color: var(--service-on);
       color: var(--service-on);
@@ -104,6 +109,10 @@
       &:hover {
         background: var(--service-hover);
       }
+    }
+
+    &:active {
+      background: var(--service-hover);
     }
   }
 }

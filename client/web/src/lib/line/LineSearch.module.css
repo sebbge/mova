@@ -37,6 +37,11 @@
   }
 }
 
+.item:active {
+  text-decoration: none;
+  background: color-mix(in srgb, var(--brand) 8%, var(--surface));
+}
+
 .names {
   display: flex;
   flex-direction: column;

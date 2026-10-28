@@ -29,6 +29,10 @@
       }
     }
 
+    &:active:not(:disabled) {
+      color: var(--sheet-header-fg, var(--text-primary));
+    }
+
     &.active {
       color: var(--sheet-header-fg, var(--text-primary));
       border-bottom-color: currentColor;

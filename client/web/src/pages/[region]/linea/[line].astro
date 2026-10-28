@@ -165,6 +165,11 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
     }
   }
 
+  nav a:active {
+    text-decoration: none;
+    border-color: var(--brand);
+  }
+
   nav a[aria-current='true'] {
     background: var(--brand-deep);
     border-color: var(--brand-deep);
@@ -184,6 +189,11 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
       text-decoration: none;
       background: color-mix(in srgb, var(--brand) 8%, var(--surface));
     }
+  }
+
+  .stops a:active {
+    text-decoration: none;
+    background: color-mix(in srgb, var(--brand) 8%, var(--surface));
   }
 
   .id {
