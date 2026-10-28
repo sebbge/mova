@@ -14,3 +14,7 @@
   --trip-origin: oklch(0.62 0.16 156);
   --trip-destination: oklch(0.6083 0.209 27.03);
 }
+
+:root[data-theme='dark'] {
+  --walk: oklch(0.7 0 0);
+}

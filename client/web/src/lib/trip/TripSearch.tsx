@@ -4,7 +4,6 @@ import {api} from '~/lib/api/client';
 import type {PlaceHit, StopHit, TravelMode} from '~/lib/api/types';
 import {fullStopName, localIso} from '~/lib/format';
 import type {Endpoint} from './endpoint';
-import {MODES} from './modes';
 import {CATEGORIES, fareProfile, PAYMENTS} from './profile';
 import type {Place} from './TripFeed';
 import styles from './TripSearch.module.css';
@@ -23,7 +22,6 @@ export default function TripSearch(props: {
   onPoint?: (field: Field, endpoint: Endpoint, label: string) => void;
   onPick?: (field: Field) => void;
   onSwap?: () => void;
-  onMode?: (mode: TravelMode) => void;
   onAt?: (at: string | null) => void;
   onClose?: () => void;
 }) {
@@ -34,7 +32,9 @@ export default function TripSearch(props: {
   const [status, setStatus] = createSignal<'idle' | 'loading' | 'error'>('idle');
   const [when, setWhen] = createSignal<'now' | 'depart'>('now');
   const [stamp, setStamp] = createSignal(localIso(new Date()));
+  const [fareOpen, setFareOpen] = createSignal(false);
   const inputs: Partial<Record<Field, HTMLInputElement>> = {};
+  let panel!: HTMLDivElement;
   const term = () => terms[active()].trim();
 
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -48,8 +48,30 @@ export default function TripSearch(props: {
     setActive(props.field);
     setWhen(props.at ? 'depart' : 'now');
     if (props.at) setStamp(props.at);
+    const opener = document.activeElement as HTMLElement | null;
     inputs[props.field]?.focus();
+    onCleanup(() => opener?.focus());
   });
+
+  // focus trap, escape closes the panel only
+  function trap(e: KeyboardEvent) {
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      props.onClose?.();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focusable = [...panel.querySelectorAll<HTMLElement>('button:not(:disabled), input')];
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last?.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first?.focus();
+    }
+  }
 
   function search(which: Field, value: string) {
     setTerms(which, value);
@@ -110,21 +132,21 @@ export default function TripSearch(props: {
     </div>
   );
 
-  const Chip = (p: {on?: boolean; disabled?: boolean; onClick?: () => void; children: string; soon?: boolean}) => (
-    <button
-      class={styles.chip}
-      classList={{[styles.on]: Boolean(p.on)}}
-      disabled={p.disabled}
-      onClick={() => p.onClick?.()}>
+  const Chip = (p: {on: boolean; onClick: () => void; children: string}) => (
+    <button class={styles.chip} classList={{[styles.on]: p.on}} aria-pressed={p.on} onClick={() => p.onClick()}>
       {p.children}
-      <Show when={p.soon}>
-        <span class={styles.soon}>Próximamente</span>
-      </Show>
     </button>
   );
 
   return (
-    <div class={styles.panel} role='dialog' aria-label='Planificar viaje'>
+    <div
+      ref={panel}
+      class={styles.panel}
+      role='dialog'
+      aria-modal='true'
+      aria-label='Planificar viaje'
+      tabindex='-1'
+      on:keydown={trap}>
       <div class={styles.fields}>
         <Field field='a' label='Origen' placeholder={props.a?.label ?? 'Origen'} />
         <Field field='b' label='Destino' placeholder={props.b?.label ?? '¿A dónde vas?'} />
@@ -161,21 +183,6 @@ export default function TripSearch(props: {
             </ul>
 
             <div class={styles.options}>
-              <p class={styles.label}>Cómo</p>
-              <div class={styles.chips}>
-                <For each={MODES}>
-                  {(m) => (
-                    <Chip
-                      on={m.id === props.mode}
-                      disabled={!m.ready}
-                      soon={!m.ready}
-                      onClick={() => m.ready && props.onMode?.(m.id as TravelMode)}>
-                      {m.label}
-                    </Chip>
-                  )}
-                </For>
-              </div>
-
               <p class={styles.label}>Cuándo</p>
               <div class={styles.chips}>
                 <Chip on={when() === 'now'} onClick={() => pickWhen('now')}>
@@ -183,9 +190,6 @@ export default function TripSearch(props: {
                 </Chip>
                 <Chip on={when() === 'depart'} onClick={() => pickWhen('depart')}>
                   Salir a las…
-                </Chip>
-                <Chip disabled soon>
-                  Llegar a las…
                 </Chip>
               </div>
               <Show when={when() === 'depart'}>
@@ -200,27 +204,42 @@ export default function TripSearch(props: {
               </Show>
 
               <Show when={props.mode === 'transit'}>
-                <p class={styles.label}>Boleto</p>
-                <div class={styles.chips}>
-                  <For each={PAYMENTS}>
-                    {(p) => (
-                      <Chip
-                        on={fareProfile.payment === p.id}
-                        onClick={() => fareProfile.set(p.id, p.id === 'cash' ? 'common' : fareProfile.category)}>
-                        {p.label}
-                      </Chip>
-                    )}
-                  </For>
-                </div>
-                <Show when={fareProfile.payment === 'card'}>
-                  <div class={styles.chips}>
-                    <For each={CATEGORIES}>
-                      {(c) => (
-                        <Chip on={fareProfile.category === c.id} onClick={() => fareProfile.set('card', c.id)}>
-                          {c.label}
-                        </Chip>
-                      )}
-                    </For>
+                {/* folded, rarely changed */}
+                <button
+                  class={styles.fare}
+                  aria-expanded={fareOpen()}
+                  aria-controls='fare-options'
+                  onClick={() => setFareOpen(!fareOpen())}>
+                  <span class={styles.label}>Boleto</span>
+                  <span class={styles.fareValue}>{fareProfile.label}</span>
+                  <svg viewBox='0 0 24 24' width='16' height='16' aria-hidden='true'>
+                    <path d='M6 9l6 6 6-6' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' />
+                  </svg>
+                </button>
+                <Show when={fareOpen()}>
+                  <div id='fare-options' class={styles.fareOptions}>
+                    <div class={styles.chips}>
+                      <For each={PAYMENTS}>
+                        {(p) => (
+                          <Chip
+                            on={fareProfile.payment === p.id}
+                            onClick={() => fareProfile.set(p.id, p.id === 'cash' ? 'common' : fareProfile.category)}>
+                            {p.label}
+                          </Chip>
+                        )}
+                      </For>
+                    </div>
+                    <Show when={fareProfile.payment === 'card'}>
+                      <div class={styles.chips}>
+                        <For each={CATEGORIES}>
+                          {(c) => (
+                            <Chip on={fareProfile.category === c.id} onClick={() => fareProfile.set('card', c.id)}>
+                              {c.label}
+                            </Chip>
+                          )}
+                        </For>
+                      </div>
+                    </Show>
                   </div>
                 </Show>
               </Show>
@@ -256,9 +275,6 @@ export default function TripSearch(props: {
               </li>
             )}
           </For>
-          <li class={styles.pending}>
-            Direcciones con número <span class={styles.soon}>Próximamente</span>
-          </li>
         </ul>
       </Show>
 

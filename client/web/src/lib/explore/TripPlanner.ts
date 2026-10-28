@@ -176,10 +176,6 @@ export class TripPlanner {
     this.url.select({[P.a]: this.bRaw, [P.b]: this.aRaw, [P.option]: null});
   }
 
-  setMode(mode: TravelMode) {
-    this.url.select({[P.mode]: mode === 'walk' ? 'pie' : null, [P.option]: null});
-  }
-
   setAt(at: string | null) {
     this.url.select({[P.at]: at, [P.option]: null});
   }

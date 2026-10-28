@@ -59,7 +59,6 @@ export default function Explore() {
             onPoint={(field, endpoint) => trip.choose(field, endpoint)}
             onPick={(field) => trip.pickOnMap(field)}
             onSwap={() => trip.swap()}
-            onMode={(mode) => trip.setMode(mode)}
             onAt={(at) => trip.setAt(at)}
             onClose={() => trip.closeSearch()}
           />

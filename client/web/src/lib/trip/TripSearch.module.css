@@ -83,12 +83,13 @@
   font-weight: 700;
 }
 
+/* capped lightness for AA */
 .origin {
-  background: var(--trip-origin);
+  background: oklch(from var(--trip-origin) min(l, 0.52) c h);
 }
 
 .destination {
-  background: var(--trip-destination);
+  background: oklch(from var(--trip-destination) min(l, 0.52) c h);
 }
 
 .stamp {
@@ -138,16 +139,10 @@
   color: var(--text-secondary);
 }
 
-.note,
-.pending {
+.note {
   padding: var(--space-3) var(--gutter);
   font-size: var(--text-sm);
   color: var(--text-secondary);
-}
-
-.pending {
-  display: flex;
-  justify-content: space-between;
 }
 
 .options {
@@ -190,11 +185,6 @@
     color: var(--brand-contrast);
   }
 
-  &:disabled {
-    cursor: default;
-    color: var(--text-hint);
-  }
-
   /* 44px tap target */
   &::after {
     content: '';
@@ -203,12 +193,42 @@
   }
 }
 
-.soon {
-  font-size: var(--text-xs);
-  font-weight: 600;
-  letter-spacing: var(--tracking-label);
-  text-transform: uppercase;
-  color: var(--text-secondary);
+.fare {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--tap);
+  margin-top: var(--space-2);
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--divider);
+  background: none;
+  cursor: pointer;
+  text-align: left;
+
+  .label {
+    margin: 0;
+  }
+
+  svg {
+    color: var(--text-secondary);
+    transition: rotate 0.2s ease;
+  }
+
+  &[aria-expanded='true'] svg {
+    rotate: 180deg;
+  }
+}
+
+.fareValue {
+  flex: 1;
+  font-size: var(--text-sm);
+}
+
+.fareOptions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
 .done {

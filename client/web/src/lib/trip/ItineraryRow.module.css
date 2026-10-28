@@ -29,9 +29,14 @@
   font-weight: 700;
 }
 
+.depart {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .times {
   font-variant-numeric: tabular-nums;
-  color: var(--text-secondary);
 }
 
 .legs {
@@ -75,6 +80,5 @@
 }
 
 .live {
-  font-weight: 600;
   color: var(--freshness-live);
 }

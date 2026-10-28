@@ -6,7 +6,6 @@ import SheetHeader from '~/lib/ui/sheet/SheetHeader';
 import ItineraryDetail from './ItineraryDetail';
 import ItineraryRow from './ItineraryRow';
 import {firstBus, type LiveBoard} from './LiveBoard';
-import {MODES} from './modes';
 import {fareProfile} from './profile';
 import type {TripFeed} from './TripFeed';
 import styles from './TripSheet.module.css';
@@ -26,7 +25,6 @@ export default function TripSheet(props: {
   const origin = () => props.feed.a?.label ?? 'el origen';
   const destination = () => props.feed.b?.label ?? 'Elegí el destino';
   const selected = () => (props.option !== null ? (props.feed.itineraries[props.option] ?? null) : null);
-  const modeLabel = () => MODES.find((m) => m.id === props.mode)?.label ?? '';
 
   createEffect(() => props.live.watch(props.feed.itineraries));
 
@@ -39,14 +37,17 @@ export default function TripSheet(props: {
           subtitle={props.feed.a ? `Desde ${props.feed.a.label}` : 'Falta el origen'}
         />
         <div class={styles.chips}>
-          <button class={styles.chip} onClick={() => props.onEdit?.('b')}>
+          <button
+            class={styles.chip}
+            aria-label={`Cambiar la hora: ${departureLabel(props.at)}`}
+            onClick={() => props.onEdit?.('b')}>
             {departureLabel(props.at)}
           </button>
-          <button class={styles.chip} onClick={() => props.onEdit?.('b')}>
-            {modeLabel()}
-          </button>
           <Show when={props.mode === 'transit'}>
-            <button class={styles.chip} onClick={() => props.onEdit?.('b')}>
+            <button
+              class={styles.chip}
+              aria-label={`Cambiar el boleto: ${fareProfile.label}`}
+              onClick={() => props.onEdit?.('b')}>
               {fareProfile.label}
             </button>
           </Show>
@@ -108,9 +109,12 @@ export default function TripSheet(props: {
             </div>
           </Match>
           <Match when={props.feed.status === 'empty'}>
-            <p class={styles.note}>
-              No encontramos cómo llegar a esa hora. Probá con otra hora o con puntos más cerca de una parada.
-            </p>
+            <div class={styles.note}>
+              <p>No encontramos cómo llegar a esa hora. Probá con otra hora o con puntos más cerca de una parada.</p>
+              <button class={styles.action} onClick={() => props.onEdit?.('b')}>
+                Cambiar la búsqueda
+              </button>
+            </div>
           </Match>
           <Match when={selected()}>
             {(itinerary) => (

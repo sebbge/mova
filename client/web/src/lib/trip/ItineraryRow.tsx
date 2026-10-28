@@ -1,6 +1,6 @@
 import {For, Show} from 'solid-js';
 import type {Itinerary} from '~/lib/api/types';
-import {clock, distance, duration, eta, fareLabel} from '~/lib/format';
+import {arrivalSpoken, clock, distance, duration, eta, fareLabel} from '~/lib/format';
 import LineBadge from '~/lib/line/LineBadge';
 import WalkIcon from '~/lib/ui/icons/WalkIcon';
 import styles from './ItineraryRow.module.css';
@@ -11,11 +11,23 @@ export default function ItineraryRow(props: {itinerary: Itinerary; live?: number
 
   return (
     <button class={styles.row} onClick={() => props.onOpen?.()}>
+      {/* duration and departure on top */}
       <span class={styles.top}>
         <span class={styles.duration}>{duration(props.itinerary.duration_s)}</span>
-        <span class={styles.times}>
-          {clock(props.itinerary.departure)} → {clock(props.itinerary.arrival)}
-        </span>
+        <Show
+          when={props.live != null && bus()}
+          fallback={<span class={styles.depart}>Sale {clock(bus()?.departure ?? props.itinerary.departure)}</span>}>
+          {(leg) => (
+            <span class={`${styles.depart} ${styles.live}`}>
+              <span aria-hidden='true'>
+                El {leg().line} en {eta(props.live ?? undefined)}
+              </span>
+              <span class='sr-only'>
+                El {leg().line} pasa {arrivalSpoken({eta: props.live ?? undefined})}
+              </span>
+            </span>
+          )}
+        </Show>
       </span>
 
       <span class={styles.legs}>
@@ -30,7 +42,7 @@ export default function ItineraryRow(props: {itinerary: Itinerary; live?: number
               {leg.mode === 'walk' ? (
                 <span class={styles.walk} title={`A pie ${distance(leg.distance_m)}`}>
                   <WalkIcon size={16} />
-                  <span>{Math.max(1, Math.round(leg.duration_s / 60))}</span>
+                  <span>{Math.max(1, Math.round(leg.duration_s / 60))} min</span>
                 </span>
               ) : (
                 <LineBadge line={leg.line} size='sm' />
@@ -41,6 +53,12 @@ export default function ItineraryRow(props: {itinerary: Itinerary; live?: number
       </span>
 
       <span class={styles.bottom}>
+        <span class={styles.times}>
+          {clock(props.itinerary.departure)} → {clock(props.itinerary.arrival)}
+        </span>
+        <span class={styles.dot} aria-hidden='true'>
+          ·
+        </span>
         <span class={styles.fare} classList={{[styles.unknown]: props.itinerary.fare.total === null}}>
           {fareLabel(props.itinerary.fare)}
         </span>
@@ -48,20 +66,6 @@ export default function ItineraryRow(props: {itinerary: Itinerary; live?: number
           ·
         </span>
         <span>{distance(props.itinerary.walk_m)} a pie</span>
-        <Show when={bus()}>
-          {(leg) => (
-            <>
-              <span class={styles.dot} aria-hidden='true'>
-                ·
-              </span>
-              <Show when={props.live != null} fallback={<span>Sale {clock(leg().departure)}</span>}>
-                <span class={styles.live}>
-                  El {leg().line} pasa en {eta(props.live ?? undefined)}
-                </span>
-              </Show>
-            </>
-          )}
-        </Show>
       </span>
     </button>
   );
