@@ -23,7 +23,7 @@ export default function ItineraryRow(props: {itinerary: Itinerary; live?: number
                 El {leg().line} en {eta(props.live ?? undefined)}
               </span>
               <span class='sr-only'>
-                El {leg().line} pasa {arrivalSpoken({eta: props.live ?? undefined})}
+                El {leg().line} pasa {arrivalSpoken({eta: props.live ?? undefined, live: true})}
               </span>
             </span>
           )}

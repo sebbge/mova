@@ -78,6 +78,11 @@
   line-height: 1.1;
 }
 
+/* schedule in text color */
+.scheduled {
+  font-weight: 400;
+}
+
 /* our estimate, dotted */
 .estimated {
   border-bottom: 1px dotted currentColor;

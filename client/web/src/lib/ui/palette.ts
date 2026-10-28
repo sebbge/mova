@@ -60,7 +60,8 @@ export function companyTint(company: string | undefined): {header: string; list:
     : {header: 'var(--service-urban-header)', list: 'var(--service-urban-list)'};
 }
 
+// schedule in text color
 export function freshnessVar(live: boolean, freshness?: BusFreshness): string {
-  if (!live) return 'var(--text-secondary)';
+  if (!live) return 'inherit';
   return FRESHNESS[freshness ?? 'live'];
 }

@@ -17,11 +17,12 @@ export function arrivalLabel(arrival: Pick<StopArrival, 'eta' | 'stop_position'>
 }
 
 // screen readers read "12'" as "12 apostrophe"
-export function arrivalSpoken(arrival: Pick<StopArrival, 'eta' | 'stop_position'> | undefined): string {
+export function arrivalSpoken(arrival: Pick<StopArrival, 'eta' | 'stop_position' | 'live'> | undefined): string {
   const minutes = arrival?.eta;
-  if (arrival?.stop_position || minutes === undefined || minutes <= 0) return arrivalLabel(arrival);
-  if (minutes > 60) return `a las ${eta(minutes)}`;
-  return minutes === 1 ? 'en 1 minuto' : `en ${minutes} minutos`;
+  const origin = arrival?.live ? ', en vivo' : ', según horario';
+  if (arrival?.stop_position || minutes === undefined || minutes <= 0) return arrivalLabel(arrival) + origin;
+  if (minutes > 60) return `a las ${eta(minutes)}${origin}`;
+  return (minutes === 1 ? 'en 1 minuto' : `en ${minutes} minutos`) + origin;
 }
 
 export function arrivalTitle(
