@@ -13,8 +13,8 @@ import {createEffect, createMemo, createSignal, Match, on, onCleanup, onMount, S
 import type {FeatureCollection} from 'geojson';
 import type {Bus, RouteShape} from '~/lib/api/types';
 import {DEFAULT_REGION, regionsInView, type MapCamera} from '~/lib/domain/regions';
-import {companyOutlineVar, companyPinVar} from '~/lib/ui/palette';
 import {theme} from '~/lib/ui/theme';
+import BusGuide from './BusGuide';
 import {BusLayer} from './buses/BusLayer';
 import {routeLayer, type RouteView} from './layers/route';
 import {stopsLayer} from './layers/stops';
@@ -24,13 +24,12 @@ import styles from './MapCanvas.module.css';
 import {RegionStops} from './RegionStops';
 import {RouteTrack} from './RouteTrack';
 import {ATTRIBUTION, basemapStyle} from './style';
-import {fitCountry, overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, uncovered, viewportKm2} from './viewport';
+import {fitCountry, overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, viewportKm2} from './viewport';
 
 const CAMERA_MS = 400;
 const FOCUS_MS = 500;
 const FOLLOW_MS = 600;
 const FAR_ZOOM = 13; // under it buses shrink
-const GUIDE_INSET = 28; // px
 
 export default function MapCanvas(props: {
   camera: MapCamera;
@@ -171,10 +170,8 @@ export default function MapCanvas(props: {
     );
 
     const buses = new BusLayer(instance, (bus) => props.onSelectBus?.(bus));
-    instance.on('move', () => updateGuide(instance));
     /* eslint-enable solid/reactivity */
     createEffect(() => map() && buses.render(props.buses, props.selectedBusId, props.shape, zoomStep() < FAR_ZOOM));
-    createEffect(() => map() && updateGuide(instance));
 
     onCleanup(() => {
       buses.destroy();
@@ -254,42 +251,6 @@ export default function MapCanvas(props: {
     if (bus) m.easeTo({center: [bus.location.lng, bus.location.lat], offset: sheetOffset(m), duration: FOLLOW_MS});
   });
 
-  // edge arrow for an out-of-view bus
-  const [guide, setGuide] = createSignal<{x: number; y: number; angle: number; bus: Bus} | null>(null);
-
-  function updateGuide(m: MapLibreMap) {
-    const bus = props.selectedBusId ? props.buses.find((b) => b.id === props.selectedBusId) : undefined;
-    if (!bus) {
-      setGuide(null);
-      return;
-    }
-    const r = uncovered(m);
-    const p = m.project([bus.location.lng, bus.location.lat]);
-    if (p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom) {
-      setGuide(null);
-      return;
-    }
-    const cx = (r.left + r.right) / 2;
-    const cy = (r.top + r.bottom) / 2;
-    const dx = p.x - cx;
-    const dy = p.y - cy;
-    const t = Math.min(
-      (r.right - r.left) / 2 / Math.max(Math.abs(dx), 1e-6),
-      (r.bottom - r.top) / 2 / Math.max(Math.abs(dy), 1e-6)
-    );
-    setGuide({
-      x: Math.min(r.right - GUIDE_INSET, Math.max(r.left + GUIDE_INSET, cx + dx * t)),
-      y: Math.min(r.bottom - GUIDE_INSET, Math.max(r.top + GUIDE_INSET, cy + dy * t)),
-      angle: (Math.atan2(dx, -dy) * 180) / Math.PI,
-      bus,
-    });
-  }
-
-  function goToGuided(bus: Bus) {
-    const m = map();
-    if (m) m.easeTo({center: [bus.location.lng, bus.location.lat], offset: sheetOffset(m), duration: FOLLOW_MS});
-  }
-
   return (
     <>
       <div class={styles.map} ref={container} />
@@ -301,24 +262,8 @@ export default function MapCanvas(props: {
           <p class={styles.banner}>Acercá el mapa para ver las paradas</p>
         </Match>
       </Switch>
-      <Show when={guide()}>
-        {(g) => (
-          <button
-            class={styles.guide}
-            style={{
-              left: `${g().x}px`,
-              top: `${g().y}px`,
-              rotate: `${g().angle}deg`,
-              '--pin': companyPinVar(g().bus.company),
-              '--pin-outline': companyOutlineVar(g().bus.company),
-            }}
-            onClick={() => goToGuided(g().bus)}
-            aria-label='Ir al bus, fuera de la vista'>
-            <svg viewBox='0 0 12 12' width='28' height='28' aria-hidden='true'>
-              <path d='M6 0 L11 9 L6 7 L1 9 Z' />
-            </svg>
-          </button>
-        )}
+      <Show when={map()}>
+        {(m) => <BusGuide map={m()} bus={props.buses.find((b) => b.id === props.selectedBusId)} />}
       </Show>
       {/* eslint-disable-next-line solid/no-innerhtml */}
       <p class={styles.credit} innerHTML={ATTRIBUTION} />

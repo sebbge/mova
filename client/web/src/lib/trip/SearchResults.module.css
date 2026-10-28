@@ -1,0 +1,48 @@
+.results {
+  list-style: none;
+  margin: 0 calc(var(--gutter) * -1);
+  padding: 0;
+
+  li + li {
+    border-top: 1px solid var(--divider);
+  }
+
+  button {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--gutter);
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+
+    @media (hover: hover) {
+      &:hover {
+        background: var(--scaffold);
+      }
+    }
+
+    &:active {
+      background: var(--scaffold);
+    }
+  }
+}
+
+.name {
+  font-weight: 500;
+}
+
+.kind {
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.note {
+  padding: var(--space-3) var(--gutter);
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}

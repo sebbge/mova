@@ -29,7 +29,7 @@ export default function Explore() {
           camera={MAP_CAMERA}
           shape={selection.line.shape}
           routeCompany={selection.routeCompany}
-          buses={selection.buses}
+          buses={selection.fleet.all}
           selectedStopId={selection.stopId}
           selectedSiblings={selection.stops.refs}
           selectedStop={selection.stops.stop}
@@ -70,11 +70,11 @@ export default function Explore() {
           onClose={() => selection.closeSheet()}
           sticky={trip.active && !selection.childOpen}>
           <Switch>
-            <Match when={selection.selectedBus}>
+            <Match when={selection.fleet.selected}>
               {(bus) => (
                 <BusSheet
                   bus={bus()}
-                  direction={selection.busDirection}
+                  direction={selection.fleet.direction}
                   onShowLine={selection.lineId === bus().line ? () => selection.showLine() : undefined}
                 />
               )}

@@ -44,29 +44,6 @@
   color: var(--freshness-imprecise);
 }
 
-/* pin's heading chevron, bigger */
-.guide {
-  position: absolute;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: var(--tap);
-  height: var(--tap);
-  margin: calc(var(--tap) / -2) 0 0 calc(var(--tap) / -2);
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: pointer;
-
-  svg {
-    fill: var(--pin);
-    stroke: var(--pin-outline);
-    stroke-width: 1.2;
-    stroke-linejoin: round;
-    filter: drop-shadow(var(--shadow-pin));
-  }
-}
-
 .credit {
   position: absolute;
   right: var(--space-2);
