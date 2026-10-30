@@ -40,5 +40,5 @@ export function arrivalTitle(
 export function delayLabel(minutes: number | undefined): string | undefined {
   if (minutes === undefined) return undefined;
   if (minutes === 0) return 'Puntual';
-  return minutes > 0 ? `${minutes}' de atraso` : `${-minutes}' adelantado`;
+  return minutes > 0 ? `${minutes}' atrasado` : `${-minutes}' adelantado`;
 }

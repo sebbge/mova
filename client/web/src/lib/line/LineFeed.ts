@@ -1,12 +1,15 @@
 import {createSignal, type Accessor, type Setter} from 'solid-js';
 import {api} from '~/lib/api/client';
-import type {Bus, BusRoute, RouteShape} from '~/lib/api/types';
+import type {Bus, BusRoute, DayType, RouteSchedule, RouteShape} from '~/lib/api/types';
+import {rawId} from '~/lib/format';
 
 type Stop = (() => void) | undefined;
 
 // each follow* returns its cleanup
 export class LineFeed {
   static readonly BUSES_MS = 10_000; // server caches positions 10 s
+  static readonly TIMES_MS = 30_000;
+  static readonly SCHEDULE_MS = 60_000; // refetched to move the next departure
 
   readonly #variants: Accessor<BusRoute[]>;
   readonly #setVariants: Setter<BusRoute[]>;
@@ -14,8 +17,17 @@ export class LineFeed {
   readonly #setShape: Setter<RouteShape | null>;
   readonly #buses: Accessor<Bus[]>;
   readonly #setBuses: Setter<Bus[]>;
+  readonly #times: Accessor<(number | null)[]>; // aligned with shape.stops
+  readonly #setTimes: Setter<(number | null)[]>;
+  readonly #schedule: Accessor<RouteSchedule | null>;
+  readonly #setSchedule: Setter<RouteSchedule | null>;
+  readonly #scheduleFailed: Accessor<boolean>;
+  readonly #setScheduleFailed: Setter<boolean>;
 
   constructor() {
+    [this.#times, this.#setTimes] = createSignal<(number | null)[]>([]);
+    [this.#schedule, this.#setSchedule] = createSignal<RouteSchedule | null>(null);
+    [this.#scheduleFailed, this.#setScheduleFailed] = createSignal(false);
     [this.#variants, this.#setVariants] = createSignal<BusRoute[]>([]);
     [this.#shape, this.#setShape] = createSignal<RouteShape | null>(null);
     [this.#buses, this.#setBuses] = createSignal<Bus[]>([]);
@@ -31,6 +43,18 @@ export class LineFeed {
 
   get buses(): Bus[] {
     return this.#buses();
+  }
+
+  get times(): (number | null)[] {
+    return this.#times();
+  }
+
+  get schedule(): RouteSchedule | null {
+    return this.#schedule();
+  }
+
+  get scheduleFailed(): boolean {
+    return this.#scheduleFailed();
   }
 
   // route_long_name order is unreliable
@@ -105,5 +129,47 @@ export class LineFeed {
       .then((s) => this.#setShape(s))
       .catch(() => !controller.signal.aborted && this.#setShape(null));
     return () => controller.abort();
+  }
+
+  // passing stopRef, or leaving the head
+  followTimes(shape: RouteShape | null, stopRef: string | null): Stop {
+    this.#setTimes([]);
+    if (!shape) return;
+    const controller = new AbortController();
+    const at = {direction: shape.direction_id, shapeId: shape.shape_id, stop: stopRef ? rawId(stopRef) : null};
+    const load = async () => {
+      try {
+        this.#setTimes((await api.routeTimes(shape.route_id, at, {signal: controller.signal})).times);
+      } catch {}
+    };
+    void load();
+    const timer = setInterval(() => void load(), LineFeed.TIMES_MS);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
+  }
+
+  // today without day
+  followSchedule(shape: RouteShape | null, stopRef: string | null, day: DayType | null): Stop {
+    this.#setSchedule(null);
+    this.#setScheduleFailed(false);
+    if (!shape || !stopRef) return;
+    const controller = new AbortController();
+    const at = {direction: shape.direction_id, stop: rawId(stopRef), day};
+    const load = async () => {
+      try {
+        this.#setSchedule(await api.routeSchedule(shape.route_id, at, {signal: controller.signal}));
+        this.#setScheduleFailed(false);
+      } catch {
+        if (!controller.signal.aborted) this.#setScheduleFailed(true);
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), LineFeed.SCHEDULE_MS);
+    return () => {
+      clearInterval(timer);
+      controller.abort();
+    };
   }
 }

@@ -3,10 +3,13 @@ use crate::{Result, format};
 use std::collections::HashMap;
 
 pub type LinesByStop = HashMap<String, Vec<String>>;
+pub type HeadsignsByShape = HashMap<String, String>;
 
 pub struct Static {
   pub gtfs: Vec<u8>,
   pub lines_by_stop: Option<LinesByStop>,
+  /// Destination per shape, overrides `trip_headsign`
+  pub headsigns: Option<HeadsignsByShape>,
 }
 
 pub struct StopName {

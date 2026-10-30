@@ -1,9 +1,17 @@
 import {createSignal, type Accessor, type Setter} from 'solid-js';
 import {api} from '~/lib/api/client';
-import type {BusLeg, Itinerary} from '~/lib/api/types';
+import type {BusLeg, Itinerary, StopLine} from '~/lib/api/types';
 
 export function firstBus(itinerary: Itinerary): BusLeg | undefined {
   return itinerary.legs.find((leg): leg is BusLeg => leg.mode === 'bus');
+}
+
+const norm = (s: string | null | undefined) => s?.trim().toUpperCase() ?? '';
+const key = (leg: BusLeg) => `${leg.from.id}|${leg.line}|${norm(leg.headsign)}`;
+
+// the leg's destination row counts
+function serves(row: StopLine, leg: BusLeg): boolean {
+  return row.line === leg.line && (!leg.headsign || norm(row.destination) === norm(leg.headsign));
 }
 
 // one arrivals call per boarding stop
@@ -19,19 +27,16 @@ export class LiveBoard {
   }
 
   eta(leg: BusLeg | undefined): number | null | undefined {
-    return leg ? this.#etas()[`${leg.from.id}|${leg.line}`] : undefined;
+    return leg ? this.#etas()[key(leg)] : undefined;
   }
 
   watch(itineraries: Itinerary[]) {
-    const byStop = new Map<string, Set<string>>();
+    const byStop = new Map<string, BusLeg[]>();
     for (const leg of itineraries.map(firstBus)) {
-      if (!leg) continue;
-      const lines = byStop.get(leg.from.id) ?? new Set<string>();
-      lines.add(leg.line);
-      byStop.set(leg.from.id, lines);
+      if (leg) byStop.set(leg.from.id, [...(byStop.get(leg.from.id) ?? []), leg]);
     }
 
-    for (const [stop, lines] of byStop) {
+    for (const [stop, legs] of byStop) {
       const last = this.#fetched.get(stop);
       if (last && Date.now() - last < LiveBoard.REFRESH_MS) continue;
       this.#fetched.set(stop, Date.now());
@@ -39,9 +44,9 @@ export class LiveBoard {
         .stopArrivals(stop)
         .then((detail) => {
           const found: Record<string, number | null> = {};
-          for (const line of lines) {
-            const live = detail.lines.find((l) => l.line === line)?.arrivals.find((a) => a.live);
-            found[`${stop}|${line}`] = live?.eta ?? null;
+          for (const leg of legs) {
+            const live = detail.lines.find((l) => serves(l, leg))?.arrivals.find((a) => a.live);
+            found[key(leg)] = live?.eta ?? null;
           }
           this.#setEtas((all) => ({...all, ...found}));
         })

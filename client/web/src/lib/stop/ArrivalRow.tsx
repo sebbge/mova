@@ -41,6 +41,7 @@ export default function ArrivalRow(props: {
           classList={{
             [styles.estimated]: Boolean(first()?.zonal || first()?.interpolated),
             [styles.scheduled]: !first()?.live,
+            [styles.now]: (first()?.eta ?? 1) <= 0,
           }}
           style={{color: freshnessVar(first()?.live ?? false, first()?.bus?.freshness)}}
           title={arrivalTitle(first())}>
@@ -51,7 +52,7 @@ export default function ArrivalRow(props: {
             <For each={props.line.arrivals.slice(1, 3)}>
               {(arrival) => (
                 <span
-                  classList={{[styles.scheduled]: !arrival.live}}
+                  classList={{[styles.scheduled]: !arrival.live, [styles.now]: (arrival.eta ?? 1) <= 0}}
                   style={{color: freshnessVar(arrival.live, arrival.bus?.freshness)}}>
                   <When arrival={arrival} />
                 </span>

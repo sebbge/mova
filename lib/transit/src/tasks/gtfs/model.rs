@@ -35,7 +35,7 @@ impl LocalGtfs {
     provider: &str,
     authority: crate::sdk::region::Region,
     names: &dyn Feed,
-    lines_by_stop: Option<&crate::sdk::feed::LinesByStop>,
+    extras: &crate::sdk::feed::Static,
   ) -> crate::Result<()> {
     let region = authority.id();
     let mut tx = db.begin().await?;
@@ -46,7 +46,7 @@ impl LocalGtfs {
     Self::insert_routes(&mut tx, gtfs, provider, region, names, &mut loaded).await?;
     Self::insert_shapes(&mut tx, gtfs, provider, region, &mut loaded).await?;
     Self::insert_calendar(&mut tx, gtfs, provider, region, &mut loaded).await?;
-    Self::insert_trips(&mut tx, gtfs, provider, region, names, &mut loaded).await?;
+    Self::insert_trips(&mut tx, gtfs, provider, region, names, extras.headsigns.as_ref(), &mut loaded).await?;
     Self::insert_stop_times(&mut tx, gtfs, provider, region, &loaded).await?;
 
     Self::analyze(&mut tx).await?;
@@ -54,7 +54,7 @@ impl LocalGtfs {
       Self::resolve_route_areas(&mut tx, provider).await?;
     }
 
-    if let Some(lines_by_stop) = lines_by_stop {
+    if let Some(lines_by_stop) = &extras.lines_by_stop {
       Self::insert_stop_lines(&mut tx, lines_by_stop, provider, region).await?;
       Self::mark_zonal(&mut tx, provider, region).await?;
     }
@@ -396,6 +396,7 @@ impl LocalGtfs {
     provider: &str,
     region: &str,
     names: &dyn Feed,
+    shape_headsigns: Option<&crate::sdk::feed::HeadsignsByShape>,
     loaded: &mut Loaded<'g>,
   ) -> crate::Result<()> {
     tracing::info!("[gtfs] syncing trips");
@@ -441,6 +442,7 @@ impl LocalGtfs {
           }
           id => id,
         };
+        let headsign = shape_id.as_ref().and_then(|s| shape_headsigns?.get(s)).or(trip.trip_headsign.as_ref());
 
         loaded.trips.insert(trip_id);
         trip_ids.push(trip_id.to_string());
@@ -451,7 +453,7 @@ impl LocalGtfs {
           gtfs_structures::DirectionType::Outbound => 0,
           gtfs_structures::DirectionType::Inbound => 1,
         }));
-        headsigns.push(trip.trip_headsign.as_deref().map(|n| names.place(n)));
+        headsigns.push(headsign.map(|n| names.place(n)));
         let times = trip.stop_times.iter();
         starts.push(times.clone().filter_map(|st| st.departure_time.or(st.arrival_time)).min().map(|t| t as i32));
         ends.push(times.filter_map(|st| st.arrival_time.or(st.departure_time)).max().map(|t| t as i32));

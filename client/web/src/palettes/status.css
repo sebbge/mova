@@ -3,7 +3,22 @@
   --meta-thermal: oklch(0.6991 0.157 238.99);
   --meta-access: oklch(0.5688 0.2219 265.38);
 
+  /* deep for AA */
+  --meta-emissions-deep: oklch(from var(--meta-emissions) 0.5 c h);
+  --meta-thermal-deep: oklch(from var(--meta-thermal) 0.5 c h);
+  --meta-access-deep: oklch(from var(--meta-access) 0.5 c h);
+  --meta-emissions-ink: var(--meta-emissions-deep);
+  --meta-thermal-ink: var(--meta-thermal-deep);
+  --meta-access-ink: var(--meta-access-deep);
+
   --freshness-live: oklch(0.62 0.16 156);
   --freshness-low: oklch(0.712 0.1795 53.54);
   --freshness-imprecise: oklch(0.66 0.19 27.03);
+}
+
+/* base hue reads on dark */
+:root[data-theme='dark'] {
+  --meta-emissions-ink: var(--meta-emissions);
+  --meta-thermal-ink: var(--meta-thermal);
+  --meta-access-ink: var(--meta-access);
 }

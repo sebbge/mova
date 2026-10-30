@@ -42,11 +42,33 @@ impl BusFreshness {
 
 //# Line def
 use crate::cache::Tracked;
-use crate::sdk::vehicles::{BusEntry, Vehicles};
+use crate::sdk::vehicles::{BusEntry, StopRef, Vehicles};
 
 use std::time::Duration;
 
 pub type Headsigns = (Vec<String>, Vec<String>);
+
+/// Columns for `unnest`
+struct Positions {
+  ids: Vec<String>,
+  lats: Vec<f64>,
+  lngs: Vec<f64>,
+  dests: Vec<Option<String>>,
+}
+
+impl Positions {
+  fn without_next_stop(buses: &[Bus]) -> Self {
+    let missing = buses.iter().filter(|b| b.seen.next_stop.is_none());
+    let mut p = Positions { ids: vec![], lats: vec![], lngs: vec![], dests: vec![] };
+    for b in missing {
+      p.ids.push(b.seen.id.clone());
+      p.lats.push(b.seen.location.lat);
+      p.lngs.push(b.seen.location.lng);
+      p.dests.push(b.seen.destination.clone());
+    }
+    p
+  }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Line {
@@ -215,6 +237,7 @@ impl Line {
       by_line.entry(ghost.seen.line.clone()).or_default().push(ghost);
     }
 
+    Self::remember_companies(&state.db, scope, by_line.values().flatten()).await;
     tracker.publish(provider, by_line).await;
   }
 
@@ -230,6 +253,7 @@ impl Line {
       seen_ids.insert(obs.id.clone());
       buses.push(tracker.observe(provider, obs).await);
     }
+    Self::remember_companies(&state.db, scope, buses.iter()).await;
     buses.extend(Self::ghosts(tracker, provider, Some(line), &seen_ids).await);
 
     Self::enrich(state, scope, line, buses).await
@@ -265,7 +289,17 @@ impl Line {
       bus.headsign = Self::compute_headsign(&bus.seen.origin, &bus.seen.destination, &headsigns);
     }
 
-    Self::fill_missing_bearings(state, scope, line, &mut buses).await;
+    let missing_stops = Positions::without_next_stop(&buses);
+    let (_, next_stops) = tokio::join!(
+      Self::fill_missing_bearings(state, scope, line, &mut buses),
+      Self::locate_next_stops(state, scope, line, missing_stops)
+    );
+    for bus in &mut buses {
+      if let Some(stop) = next_stops.get(&bus.seen.id) {
+        bus.seen.next_stop = Some(stop.clone());
+      }
+    }
+
     Self::cache_set(&state.cache, scope.region.id(), scope.provider, line, &buses).await;
 
     let destination = buses.first().map(|b| b.seen.destination.clone()).unwrap_or_default();
@@ -307,6 +341,22 @@ impl Line {
         state.cache.tracker().set_bearing(scope.provider, &p.seen.id, deg).await;
       }
     }
+  }
+
+  /// Next stop ahead on the nearest shape, for sources without one
+  async fn locate_next_stops(
+    state: &crate::Transit,
+    scope: &Scope,
+    line: &str,
+    p: Positions,
+  ) -> HashMap<String, StopRef> {
+    if p.ids.is_empty() {
+      return HashMap::new();
+    }
+
+    let rows = Self::query_next_stops(&state.db, scope, line, &p).await;
+
+    rows.into_iter().map(|r| (r.bus_id, StopRef { id: r.stop_id, name: r.stop_name })).collect()
   }
 
   async fn load_headsigns(state: &crate::Transit, scope: &Scope, route_short_name: &str) -> Headsigns {

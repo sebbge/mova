@@ -29,23 +29,16 @@ async fn check_and_sync(state: &crate::Transit, handle: &crate::sdk::provider::P
 
   // download
   tracing::info!(provider, new = new_version, previous = ?current_version, "[gtfs] syncing");
-  let crate::sdk::feed::Static { gtfs: zip_bytes, lines_by_stop } = feed.download().await?;
+  let mut extras = feed.download().await?;
+  let zip_bytes = std::mem::take(&mut extras.gtfs);
   let gtfs = tokio::task::spawn_blocking(move || Gtfs::from_reader(Cursor::new(zip_bytes)))
     .await
     .map_err(|e| crate::Error::External(format!("GTFS parse task panicked: {e}")))?
     .map_err(|e| crate::Error::External(format!("GTFS parse failed: {e}")))?;
 
   // this provider only
-  LocalGtfs::replace_transaction(
-    &state.tasks_db,
-    &gtfs,
-    &new_version,
-    provider,
-    handle.authority,
-    feed,
-    lines_by_stop.as_ref(),
-  )
-  .await?;
+  LocalGtfs::replace_transaction(&state.tasks_db, &gtfs, &new_version, provider, handle.authority, feed, &extras)
+    .await?;
 
   {
     // stop bearings, outside the transaction

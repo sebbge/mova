@@ -1,7 +1,7 @@
 import type {FeatureCollection} from 'geojson';
 import type {GeoJSONSource, Map as MapLibreMap} from 'maplibre-gl';
 import type {StopItem} from '~/lib/api/types';
-import {providerInfo, serviceOf, type Service} from '~/lib/domain/providers';
+import {stopServices, type Service} from '~/lib/domain/providers';
 import {serviceColor} from '~/lib/map/paint';
 import {STOP_OPACITY, type StopsMarks} from './stops';
 
@@ -53,9 +53,7 @@ function features(stops: StopItem[], marks: StopsMarks): FeatureCollection {
       if (!stop.footprint) return [];
       const ring: [number, number][] = [];
       for (let i = 0; i + 1 < stop.footprint.length; i += 2) ring.push([stop.footprint[i], stop.footprint[i + 1]]);
-      const services = new Set(
-        stop.providers ? stop.providers.map((p) => providerInfo(p).service) : [serviceOf(stop.id)]
-      );
+      const services = new Set(stopServices(stop));
       const selected = stop.id === marks.selectedId || marks.siblings.includes(stop.id);
       return [
         {

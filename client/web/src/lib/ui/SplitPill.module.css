@@ -1,0 +1,62 @@
+.pill {
+  --pill-h: 2rem;
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: var(--pill-h);
+  background: var(--surface);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-transform: capitalize;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* white over color */
+.lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0 var(--space-3);
+  background: var(--pill);
+  color: var(--service-header-on);
+  letter-spacing: var(--tracking-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-top-right-radius: var(--radius-pill);
+  border-bottom-right-radius: var(--radius-pill);
+}
+
+.small {
+  --pill-h: 1.5rem;
+  font-size: var(--text-xs);
+}
+
+/* exact circle */
+.lead.iconic {
+  flex: none;
+  justify-content: center;
+  width: var(--pill-h);
+  padding: 0;
+  border-radius: 50%;
+}
+
+.text {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-3) 0 var(--space-2);
+  color: var(--pill-ink, var(--text-primary));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+
+  &:first-child {
+    padding-left: var(--space-3);
+  }
+}
+
+.small .text {
+  padding: 0 var(--space-2) 0 var(--space-1);
+}

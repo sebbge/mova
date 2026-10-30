@@ -33,6 +33,13 @@ export function fareLabel(fare: Fare): string {
   return fare.total === 0 ? 'Gratis' : money(fare.total);
 }
 
+// gtfs runs past 24 h
+export function clockOf(secs: number): string {
+  const minutes = Math.round(secs / 60) % 1440;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+}
+
 export function localIso(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;

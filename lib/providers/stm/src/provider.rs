@@ -30,7 +30,10 @@ impl Feed for Stm {
   }
 
   async fn download(&self) -> Result<Static> {
-    Ok(Static { gtfs: self.api.gtfs_download().await?, lines_by_stop: None })
+    let (gtfs, headsigns) = tokio::join!(self.api.gtfs_download(), self.api.headsigns());
+    let headsigns =
+      headsigns.inspect_err(|e| tracing::warn!(error = ?e, "[stm/linevariants] GTFS headsigns kept")).ok();
+    Ok(Static { gtfs: gtfs?, lines_by_stop: None, headsigns })
   }
 
   fn route(&self, raw: &str) -> String {

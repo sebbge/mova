@@ -34,3 +34,29 @@ export interface RouteShape {
   stops: RouteStop[];
   available_directions: DirectionInfo[];
 }
+
+export interface RouteTimes {
+  times: (number | null)[];
+}
+
+export type DayType = 'habil' | 'sabado' | 'domingo';
+
+export interface ScheduleDeparture {
+  secs: number;
+  minute: number;
+  zonal?: boolean;
+  interpolated?: boolean;
+  next?: boolean;
+}
+
+export interface ScheduleHour {
+  hour: number;
+  late: boolean;
+  departures: ScheduleDeparture[];
+}
+
+export interface RouteSchedule {
+  day: DayType;
+  date: string;
+  hours: ScheduleHour[];
+}

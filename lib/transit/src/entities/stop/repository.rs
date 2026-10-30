@@ -1,7 +1,7 @@
 use super::super::bus::Bus;
 use super::{
-  ApproachingBusRow, PastStopBusRow, ScheduleProfile, ScheduledLine, Stop, StopArrival, StopDetail, StopHit, StopItem,
-  StopLine, StopLines, StopRoute, StopSchedule,
+  ApproachingBusRow, PastStopBusRow, ScheduleProfile, ScheduledLine, ServiceKey, Stop, StopArrival, StopDetail,
+  StopHit, StopItem, StopLine, StopLines, StopRoute, StopSchedule,
 };
 use crate::helpers::Encoding;
 use crate::scope::Scope;
@@ -89,7 +89,7 @@ impl StopLine {
         SELECT
             line, destination, secs, zonal, interpolated,
             ROW_NUMBER() OVER (
-                PARTITION BY line
+                PARTITION BY line, UPPER(TRIM(destination))
                 ORDER BY secs
             ) AS rn
         FROM all_departures
@@ -111,7 +111,8 @@ impl StopLine {
     let mut map = StopLines::new();
     for row in rows {
       let eta = row.secs.map(|s| chrono::Duration::seconds(s).num_minutes());
-      let entry = map.entry(row.line.clone()).or_insert_with(|| StopLine {
+      let key = ServiceKey::new(&row.line, row.destination.as_deref());
+      let entry = map.entry(key).or_insert_with(|| StopLine {
         line: row.line,
         destination: row.destination,
         company: String::new(),
@@ -136,18 +137,67 @@ impl StopLine {
       sqlx::query_scalar(q).bind(stop_id).bind(scope.region.id()).bind(scope.provider).fetch_all(db).await?;
 
     for line in roster {
-      map.entry(line.clone()).or_insert_with(|| StopLine {
-        line,
-        destination: None,
-        company: String::new(),
-        arrivals: vec![],
-      });
+      if map.values().any(|l| l.line == line) {
+        continue;
+      }
+      map.insert(
+        ServiceKey::new(&line, None),
+        StopLine { line, destination: None, company: String::new(), arrivals: vec![] },
+      );
     }
 
+    let mut ids: Vec<&str> = map.values().map(|l| l.line.as_str()).collect();
+    ids.sort_unstable();
+    ids.dedup();
+    // shared lines (CE1) have no company
+    let q = r#"
+    SELECT line, min(company) FROM (
+      SELECT line, company, seen_at, max(seen_at) OVER (PARTITION BY line) AS newest
+      FROM line_companies
+      WHERE region = $1 AND provider = $2 AND line = ANY($3)
+    ) c
+    WHERE seen_at > newest - INTERVAL '1 day'
+    GROUP BY line
+    HAVING count(*) = 1
+    "#;
+    let companies: HashMap<String, String> = sqlx::query_as(q)
+      .bind(scope.region.id())
+      .bind(scope.provider)
+      .bind(&ids)
+      .fetch_all(db)
+      .await?
+      .into_iter()
+      .collect();
+
     let mut lines: Vec<StopLine> = map.into_values().collect();
+    for l in &mut lines {
+      if let Some(company) = companies.get(&l.line) {
+        l.company.clone_from(company);
+      }
+    }
     lines.sort_by(|a, b| a.cmp_by_first_eta(b));
     lines.truncate(20);
-    Ok(lines.into_iter().map(|l| (l.line.clone(), l)).collect())
+    Ok(lines.into_iter().map(|l| (l.key(), l)).collect())
+  }
+
+  /// Most frequent headsign per shape
+  pub async fn shape_headsigns(
+    db: &crate::Db,
+    scope: &Scope,
+    shape_ids: &[String],
+  ) -> crate::Result<HashMap<String, String>> {
+    if shape_ids.is_empty() {
+      return Ok(HashMap::new());
+    }
+    let q = r#"
+    SELECT DISTINCT ON (shape_id) shape_id, trip_headsign FROM trips
+    WHERE region = $1 AND provider = $2 AND shape_id = ANY($3) AND trip_headsign IS NOT NULL
+    GROUP BY shape_id, trip_headsign
+    ORDER BY shape_id, count(*) DESC
+    "#;
+    let rows: Vec<(String, String)> =
+      sqlx::query_as(q).bind(scope.region.id()).bind(scope.provider).bind(shape_ids).fetch_all(db).await?;
+    Ok(rows.into_iter().collect())
   }
 
   /// Lines without any shape
@@ -823,6 +873,7 @@ impl StopArrival {
     #[derive(sqlx::FromRow)]
     struct Row {
       line: String,
+      headsign: Option<String>,
       bus_id: Option<String>,
       remaining_m: Option<f64>,
       bus_frac: f64,
@@ -837,7 +888,7 @@ impl StopArrival {
       r#"
       , nearby AS (
           SELECT DISTINCT ON (b.bus_id)
-              b.bus_line AS line, b.bus_id, ls.shape_id, ls.shape, ls.stop_frac,
+              b.bus_line AS line, ls.headsign, b.bus_id, ls.shape_id, ls.shape, ls.stop_frac,
               ST_LineLocatePoint(ls.shape,
                   ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)) AS bus_frac
           FROM buses b"#,
@@ -849,9 +900,10 @@ impl StopArrival {
                   ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography) < 500
           ORDER BY b.bus_id,
               ST_Distance(ls.shape::geography,
-                  ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography)
+                  ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography),
+              UPPER(TRIM(ls.headsign)) IS NOT DISTINCT FROM UPPER(TRIM(b.bus_dest)) DESC
       )
-      SELECT c.line, c.bus_id, c.bus_frac, c.stop_frac,
+      SELECT c.line, c.headsign, c.bus_id, c.bus_frac, c.stop_frac,
              ST_Length(ST_LineSubstring(c.shape, c.bus_frac, c.stop_frac)::geography) AS remaining_m,
              n.fracs, n.secs
       FROM nearby c
@@ -910,7 +962,13 @@ impl StopArrival {
             (Some(fracs), Some(secs)) => ScheduleProfile::new(fracs, secs).between(r.bus_frac, r.stop_frac),
             _ => None,
           };
-          Some(ApproachingBusRow { line: r.line, bus_id: r.bus_id.unwrap_or_default(), remaining_m, scheduled_s })
+          Some(ApproachingBusRow {
+            line: r.line,
+            headsign: r.headsign,
+            bus_id: r.bus_id.unwrap_or_default(),
+            remaining_m,
+            scheduled_s,
+          })
         })
         .collect(),
     )
@@ -946,6 +1004,7 @@ impl StopArrival {
     #[derive(sqlx::FromRow)]
     struct Row {
       line: String,
+      headsign: Option<String>,
       bus_id: Option<String>,
       past_m: Option<f64>,
     }
@@ -954,7 +1013,7 @@ impl StopArrival {
       projection_cte!(),
       r#"
       SELECT DISTINCT ON (b.bus_id)
-          b.bus_line AS line, b.bus_id,
+          b.bus_line AS line, ls.headsign, b.bus_id,
           ST_Length(ST_LineSubstring(
               ls.shape,
               ls.stop_frac,
@@ -972,7 +1031,8 @@ impl StopArrival {
               ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography) < 500
       ORDER BY b.bus_id,
           ST_Distance(ls.shape::geography,
-              ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography)
+              ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography),
+          UPPER(TRIM(ls.headsign)) IS NOT DISTINCT FROM UPPER(TRIM(b.bus_dest)) DESC
       "#
     );
     let rows: Vec<Row> = sqlx::query_as(q)
@@ -991,7 +1051,12 @@ impl StopArrival {
     Ok(
       rows
         .into_iter()
-        .map(|r| PastStopBusRow { line: r.line, bus_id: r.bus_id.unwrap_or_default(), past_m: r.past_m.unwrap_or(0.0) })
+        .map(|r| PastStopBusRow {
+          line: r.line,
+          headsign: r.headsign,
+          bus_id: r.bus_id.unwrap_or_default(),
+          past_m: r.past_m.unwrap_or(0.0),
+        })
         .collect(),
     )
   }

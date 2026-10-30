@@ -1,3 +1,5 @@
+import type {StopItem} from '~/lib/api/types';
+
 export type Service = 'urban' | 'suburban' | 'inter' | 'neutral';
 
 // display and pin split order
@@ -55,6 +57,12 @@ export function providerInfo(id: string | undefined): ProviderInfo {
 
 export function serviceOf(ref: string): Service {
   return providerInfo(providerOf(ref)).service;
+}
+
+// pin split order
+export function stopServices(stop: StopItem): Service[] {
+  const services = new Set(stop.providers ? stop.providers.map((p) => providerInfo(p).service) : [serviceOf(stop.id)]);
+  return SERVICES.filter((s) => services.has(s));
 }
 
 export function hasLines(provider: string): boolean {

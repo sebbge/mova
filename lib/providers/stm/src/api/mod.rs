@@ -3,7 +3,8 @@ mod auth;
 pub mod models;
 pub mod online;
 use self::auth::StmAuth;
-use self::models::{StmLineBus, StmUpcomingBus};
+use self::models::{StmLineBus, StmLineVariant, StmUpcomingBus};
+use crate::sdk::feed::HeadsignsByShape;
 use crate::sdk::limiter::{Limiter, Priority};
 use crate::sdk::{Error, Result, http};
 
@@ -246,5 +247,16 @@ impl StmApi {
     let url = format!("{}{}/google_transit.zip", self.url, Self::GTFS_URL);
     let res = http::ok(self.get(&url, "[stm/gtfs]", Priority::Background).await?, "[stm/gtfs]").await?;
     http::bytes(res, "[stm/gtfs]").await
+  }
+
+  /// IM variant names, finer than the GTFS ones
+  pub async fn headsigns(&self) -> Result<HeadsignsByShape> {
+    let url = format!("{}/buses/linevariants", self.url);
+    let res = http::ok(self.get(&url, "[stm/linevariants]", Priority::Background).await?, "[stm/linevariants]").await?;
+    let bytes = http::bytes(res, "[stm/linevariants]").await?;
+    let variants: Vec<StmLineVariant> = decode_each(&bytes, &url, "[stm/linevariants]")?;
+
+    tracing::info!(variants = variants.len(), "[stm/linevariants] OK");
+    Ok(variants.into_iter().filter_map(|v| Some((v.line_variant_id.to_string(), v.destination?))).collect())
   }
 }

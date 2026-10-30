@@ -29,6 +29,8 @@ export interface Bus {
   freshness: BusFreshness;
   still: boolean;
   past_stop: boolean;
+  photo_url?: string;
+  logo_url?: string;
 }
 
 export interface RegionBus extends Bus {

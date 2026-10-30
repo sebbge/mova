@@ -38,7 +38,8 @@ export function mapText(): {color: string; halo: string} {
 
 // gray without a company
 export function routeColor(company: string | undefined): string {
-  return token(`--company-${companySlug(company) ?? 'unknown'}`, '#8a8f98');
+  const slug = companySlug(company) ?? 'unknown';
+  return token(`--company-${slug}-pin`, token(`--company-${slug}`, '#8a8f98'));
 }
 
 export function outline(): string {

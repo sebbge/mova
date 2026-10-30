@@ -1,5 +1,5 @@
 import {createEffect, createSignal, onCleanup, untrack, type Accessor, type Setter} from 'solid-js';
-import type {Bus, BusLeg} from '~/lib/api/types';
+import type {Bus, BusLeg, DayType, RouteStop} from '~/lib/api/types';
 import {follows} from '~/lib/domain/buses';
 import {hasLines, providerOf} from '~/lib/domain/providers';
 import {LineFeed} from '~/lib/line/LineFeed';
@@ -8,8 +8,17 @@ import {Fleet} from './Fleet';
 import type {MapUrl} from './MapUrl';
 import {TripPlanner} from './TripPlanner';
 
-const P = {stop: 'parada', line: 'linea', variant: 'v', direction: 'd', shape: 's', bus: 'bus'} as const;
-const LINE_CLEARED = {[P.line]: null, [P.variant]: null, [P.direction]: null, [P.shape]: null};
+const P = {
+  stop: 'parada',
+  line: 'linea',
+  variant: 'v',
+  direction: 'd',
+  shape: 's',
+  bus: 'bus',
+  schedule: 'planilla',
+} as const;
+const LINE_CLEARED = {[P.line]: null, [P.variant]: null, [P.direction]: null, [P.shape]: null, [P.schedule]: null};
+const DAY_TYPES: readonly string[] = ['habil', 'sabado', 'domingo'];
 
 // back returns to it before the line
 interface BusStep {
@@ -18,6 +27,21 @@ interface BusStep {
   busFromStop: boolean;
   lineFromBus: string | null;
   lineCompany: string | undefined;
+}
+
+// line before a stop was picked
+interface LineOrigin {
+  line: string;
+  stop: string | null;
+}
+
+// sheet the arrivals were opened from
+interface SheetStep {
+  stop: string;
+  search: string;
+  origin: LineOrigin | null;
+  busFromStop: boolean;
+  lineFromBus: string | null;
 }
 
 // self-corrections use replace, or back loops
@@ -41,6 +65,12 @@ export class MapSelection {
   readonly #setPinnedBus: Setter<string | null>;
   readonly #busTrail: Accessor<BusStep[]>;
   readonly #setBusTrail: Setter<BusStep[]>;
+  readonly #previewStop: Accessor<string | null>; // map only
+  readonly #setPreviewStop: Setter<string | null>;
+  readonly #lineOrigin: Accessor<LineOrigin | null>;
+  readonly #setLineOrigin: Setter<LineOrigin | null>;
+  readonly #stopFrom: Accessor<SheetStep | null>;
+  readonly #setStopFrom: Setter<SheetStep | null>;
 
   constructor(private readonly url: MapUrl) {
     this.fleet = new Fleet(this);
@@ -52,6 +82,15 @@ export class MapSelection {
     [this.#lineFromBus, this.#setLineFromBus] = createSignal<string | null>(null);
     [this.#pinnedBus, this.#setPinnedBus] = createSignal<string | null>(null);
     [this.#busTrail, this.#setBusTrail] = createSignal<BusStep[]>([]);
+    [this.#previewStop, this.#setPreviewStop] = createSignal<string | null>(null);
+    [this.#lineOrigin, this.#setLineOrigin] = createSignal<LineOrigin | null>(null);
+    [this.#stopFrom, this.#setStopFrom] = createSignal<SheetStep | null>(null);
+
+    // marked stop was the previous bus's
+    createEffect(() => {
+      void this.busId;
+      untrack(() => this.#setPreviewStop(null));
+    });
 
     // trail: close empties, back pops
     createEffect(() => {
@@ -66,6 +105,15 @@ export class MapSelection {
     onCleanup(() => this.stops.close());
     createEffect(() => onCleanup(this.line.followVariants(this.lineId) ?? (() => {})));
     createEffect(() => onCleanup(this.line.followBuses(this.#lineProvider(), this.lineId) ?? (() => {})));
+    createEffect(() =>
+      onCleanup(this.line.followTimes(this.lineId ? this.line.shape : null, this.#lineStopId()) ?? (() => {}))
+    );
+    createEffect(() =>
+      onCleanup(
+        this.line.followSchedule(this.scheduleOpen ? this.line.shape : null, this.#lineStopId(), this.#scheduleDay()) ??
+          (() => {})
+      )
+    );
     createEffect(() => {
       const shapeRef = this.shapeRef;
       const stop = shapeRef
@@ -135,6 +183,28 @@ export class MapSelection {
     return this.url.get(P.shape);
   }
 
+  get previewStop(): string | null {
+    return this.#previewStop();
+  }
+
+  // marked or url stop
+  get mapStopId(): string | null {
+    return this.#previewStop() ?? this.stopId;
+  }
+
+  // may be a sibling of the same shelter
+  get lineStop(): RouteStop | undefined {
+    const id = this.stopId;
+    if (!id) return undefined;
+    const refs = this.stops.refs;
+    return this.line.shape?.stops.find((s) => s.stop_id === id || refs.includes(s.stop_id));
+  }
+
+  // hoy: server picks the day type
+  get scheduleOpen(): boolean {
+    return this.lineId !== null && this.url.get(P.schedule) !== null;
+  }
+
   get knownName(): string | undefined {
     return this.#knownName();
   }
@@ -173,6 +243,7 @@ export class MapSelection {
   // no browser history
   get back(): (() => void) | undefined {
     if (this.busId) return this.#busTrail().length > 0 ? () => this.#backToBus() : () => this.closeBus();
+    if (this.scheduleOpen) return () => this.closeSchedule();
     const fromBus = this.#lineFromBus();
     if (this.lineId && fromBus) {
       return () => {
@@ -180,7 +251,8 @@ export class MapSelection {
         this.url.select({[P.bus]: fromBus});
       };
     }
-    if (this.lineId && this.stopId) return () => this.url.select(LINE_CLEARED);
+    if (this.lineId && this.#originStop()) return () => this.#leaveLine();
+    if (!this.lineId && this.stopId && this.#stopFrom()?.stop === this.stopId) return () => this.#backToSheet();
     const trip = this.planner;
     if (!this.childOpen) return trip.active && trip.option !== null ? () => trip.setOption(null) : undefined;
     return trip.active ? () => this.close() : undefined;
@@ -195,7 +267,53 @@ export class MapSelection {
     this.#setKnownName(name);
     this.#setBusFromStop(false);
     this.#setLineFromBus(null);
+    this.#setLineOrigin(null);
+    this.#setStopFrom(null);
     this.url.select({[P.stop]: id, ...LINE_CLEARED, [P.bus]: null});
+  }
+
+  // stays in the line sheet
+  selectMapStop(id: string, name?: string) {
+    const onLine = this.lineId && !this.fleet.selected && this.line.shape?.stops.some((s) => s.stop_id === id);
+    if (onLine && id === this.stopId) this.openStopFromLine(id, name);
+    else if (onLine) this.pickLineStop(id);
+    else this.openStop(id, name);
+  }
+
+  pickLineStop(id: string) {
+    const picking = this.planner.picking;
+    if (picking) {
+      this.planner.setPoint(picking, {kind: 'stop', ref: id});
+      return;
+    }
+    const line = this.lineId;
+    if (!line) return;
+    if (this.#lineOrigin()?.line !== line) this.#setLineOrigin({line, stop: this.stopId});
+    this.url.select({[P.stop]: id}, true);
+  }
+
+  // back returns to the line
+  openStopFromLine(id: string, name?: string) {
+    const line = this.lineId;
+    const origin = this.#lineOrigin();
+    this.#setStopFrom({
+      stop: id,
+      search: this.url.search,
+      origin: !line ? null : origin?.line === line ? origin : {line, stop: this.stopId},
+      busFromStop: this.#busFromStop(),
+      lineFromBus: this.#lineFromBus(),
+    });
+    this.#setKnownName(name);
+    this.url.select({[P.stop]: id, ...LINE_CLEARED, [P.bus]: null});
+  }
+
+  // first tap marks, second opens arrivals
+  pickBusStop(stopId: string, name?: string) {
+    const provider = (this.busId && this.fleet.providerOf(this.busId)) || this.#lineProvider();
+    if (!provider) return;
+    const ref = `${provider}-${stopId}`;
+    if (this.#previewStop() === ref) this.openStopFromLine(ref, name);
+    else this.#setPreviewStop(ref);
   }
 
   // first tap opens, then pins/unpins the camera
@@ -231,8 +349,9 @@ export class MapSelection {
     const fromStop = this.lineId !== bus.line;
     this.#setBusFromStop(fromStop);
     // same trace: only the bus changes
-    const shape = this.line.shape;
-    if (!fromStop && (!shape || follows(bus, shape))) {
+    const drawn = this.line.shape;
+    const sameTrace = !drawn || (follows(bus, drawn) && (!bus.shape_id || bus.shape_id === drawn.shape_id));
+    if (!fromStop && sameTrace) {
       this.url.select({[P.bus]: bus.id});
       return;
     }
@@ -264,12 +383,15 @@ export class MapSelection {
     this.#setDirectionHint(destination ?? null);
     this.#setLineCompany(company);
     this.#setLineFromBus(null);
+    this.#setLineOrigin(null);
     this.url.select({...LINE_CLEARED, [P.line]: line, [P.bus]: null});
   }
 
   // live -> bus, scheduled -> line
   openArrival(line: string, destination?: string, company?: string) {
-    const arrival = this.stops.arrivals.find((l) => l.line === line)?.arrivals.find((a) => a.live && a.bus);
+    const arrival = this.stops.arrivals
+      .find((l) => l.line === line && (l.destination ?? undefined) === destination)
+      ?.arrivals.find((a) => a.live && a.bus);
     if (arrival?.bus && arrival.stop_position) this.openBusOnly(arrival.bus);
     else if (arrival?.bus) this.openBus(arrival.bus);
     else this.openLine(line, destination, company);
@@ -287,6 +409,7 @@ export class MapSelection {
     this.#setDirectionHint(leg.headsign);
     this.#setLineCompany(undefined);
     this.#setLineFromBus(null);
+    this.#setLineOrigin(null);
     this.url.select({...LINE_CLEARED, [P.line]: leg.line, [P.variant]: leg.route_id, [P.bus]: null});
   }
 
@@ -305,9 +428,57 @@ export class MapSelection {
     else this.url.select({[P.bus]: null});
   }
 
+  // over the line, back returns to it
+  openSchedule() {
+    this.url.select({[P.schedule]: 'hoy'});
+  }
+
+  pickScheduleDay(day: DayType) {
+    this.url.select({[P.schedule]: day}, true);
+  }
+
+  closeSchedule() {
+    this.url.select({[P.schedule]: null});
+  }
+
   close() {
     if (this.busId) this.closeBus();
-    else this.url.select({[P.stop]: null, ...LINE_CLEARED, [P.bus]: null});
+    else if (this.lineId && this.#originStop() && !this.scheduleOpen) this.#leaveLine();
+    else {
+      this.#setLineOrigin(null);
+      this.#setStopFrom(null);
+      this.url.select({[P.stop]: null, ...LINE_CLEARED, [P.bus]: null});
+    }
+  }
+
+  #lineStopId(): string | null {
+    return this.lineStop?.stop_id ?? null;
+  }
+
+  #scheduleDay(): DayType | null {
+    const day = this.url.get(P.schedule);
+    return day && DAY_TYPES.includes(day) ? (day as DayType) : null;
+  }
+
+  #originStop(): string | null {
+    const origin = this.#lineOrigin();
+    return origin?.line === this.lineId ? origin.stop : this.stopId;
+  }
+
+  #leaveLine() {
+    const origin = this.#originStop();
+    this.#setLineOrigin(null);
+    this.url.select({[P.stop]: origin, ...LINE_CLEARED, [P.bus]: null});
+  }
+
+  #backToSheet() {
+    const step = this.#stopFrom();
+    if (!step) return;
+    this.#setStopFrom(null);
+    this.#setLineOrigin(step.origin);
+    this.#setBusFromStop(step.busFromStop);
+    this.#setLineFromBus(step.lineFromBus);
+    this.url.restore(step.search);
   }
 
   // fb while s arrives before v

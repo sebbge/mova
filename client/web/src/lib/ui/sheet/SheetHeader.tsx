@@ -6,6 +6,7 @@ export default function SheetHeader(props: {
   kicker?: string;
   title: string;
   subtitle?: string;
+  wrapSubtitle?: boolean;
   lead?: JSX.Element;
   loading?: boolean; // bars until known
 }) {
@@ -35,7 +36,7 @@ export default function SheetHeader(props: {
           {props.loading ? '' : props.title}
         </h2>
         <Show when={props.loading || props.subtitle}>
-          <span class={styles.subtitle} classList={shimmer()}>
+          <span class={styles.subtitle} classList={{...shimmer(), [styles.wrap]: Boolean(props.wrapSubtitle)}}>
             {props.loading ? '' : props.subtitle}
           </span>
         </Show>

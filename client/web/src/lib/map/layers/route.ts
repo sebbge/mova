@@ -120,6 +120,7 @@ export const routeLayer = {
         properties: {
           stop_id: stop.stop_id,
           stop_name: stop.stop_name,
+          cluster: stop.cluster,
           selected: isSelected(stop.stop_id),
           terminal: terminalOf(i, stops.length),
         },

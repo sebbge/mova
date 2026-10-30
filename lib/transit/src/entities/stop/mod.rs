@@ -5,7 +5,17 @@ use crate::sdk::vehicles::BusEntry;
 
 mod repository;
 
-pub type StopLines = HashMap<String, StopLine>;
+pub type StopLines = HashMap<ServiceKey, StopLine>;
+
+/// A line towards one destination
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ServiceKey(String, String);
+
+impl ServiceKey {
+  pub fn new(line: &str, destination: Option<&str>) -> Self {
+    Self(line.to_owned(), destination.map(|d| d.trim().to_uppercase()).unwrap_or_default())
+  }
+}
 
 ///# GET <MOVA>/stops/{stop_id}/arrivals
 #[derive(Debug, Serialize, Deserialize)]
@@ -118,6 +128,7 @@ pub enum StopPosition {
 //TODO: remove
 pub struct ApproachingBusRow {
   pub line: String,
+  pub headsign: Option<String>,
   pub bus_id: String,
   pub remaining_m: f64,
   pub scheduled_s: Option<f64>,
@@ -154,30 +165,27 @@ impl ScheduleProfile {
 //TODO: remove
 pub struct PastStopBusRow {
   pub line: String,
+  pub headsign: Option<String>,
   pub bus_id: String,
   pub past_m: f64,
 }
 
 impl StopArrival {
-  const RT_GTFS_DEDUP_MARGIN_MIN: i64 = 3;
+  const RT_GTFS_DEDUP_MARGIN_MIN: i64 = 6;
 
-  pub fn dedup_gtfs_backfill(rt_arrivals: &[Self], gtfs_arrivals: impl Iterator<Item = Self>) -> Vec<Self> {
-    let rt_etas: Vec<i64> = rt_arrivals.iter().filter(|a| a.live).filter_map(|a| a.eta).collect();
-    gtfs_arrivals
-      .filter(|a| {
-        let Some(eta) = a.eta else { return true };
-        !rt_etas.iter().any(|&rt| (eta - rt).abs() <= Self::RT_GTFS_DEDUP_MARGIN_MIN)
-      })
-      .collect()
-  }
-
-  /// Live, scheduled, untimed
-  pub fn sort_by_eta(arrivals: &mut [Self]) {
+  /// Live and scheduled by ETA, schedules near a live bus dropped
+  pub fn merge(arrivals: &mut Vec<Self>) {
+    let rt_etas: Vec<i64> = arrivals.iter().filter(|a| a.live).filter_map(|a| a.eta).collect();
+    arrivals.retain(|a| {
+      a.live || a.eta.is_none_or(|eta| !rt_etas.iter().any(|&rt| (eta - rt).abs() <= Self::RT_GTFS_DEDUP_MARGIN_MIN))
+    });
     arrivals.sort_by_key(Self::rank);
+    arrivals.truncate(3);
   }
 
-  fn rank(&self) -> (bool, bool, i64) {
-    (!self.live, self.eta.is_none(), self.eta.unwrap_or_default())
+  /// By ETA, at-stop and next as now, live first on ties, untimed last
+  fn rank(&self) -> (bool, i64, bool) {
+    (self.eta.is_none() && self.stop_position.is_none(), self.eta.unwrap_or_default(), !self.live)
   }
 
   /// Commercial speed without schedule
@@ -213,12 +221,22 @@ impl StopArrival {
 
 impl StopLine {
   pub fn cmp_by_first_eta(&self, other: &Self) -> std::cmp::Ordering {
-    let rank = |l: &Self| l.arrivals.first().map(StopArrival::rank).unwrap_or((true, true, 0));
+    let rank = |l: &Self| l.arrivals.first().map(StopArrival::rank).unwrap_or((true, 0, true));
     rank(self).cmp(&rank(other))
   }
 
-  fn empty(line: String) -> Self {
-    Self { line, destination: None, company: String::new(), arrivals: vec![] }
+  fn empty(line: String, destination: Option<String>) -> Self {
+    Self { line, destination, company: String::new(), arrivals: vec![] }
+  }
+
+  pub fn key(&self) -> ServiceKey {
+    ServiceKey::new(&self.line, self.destination.as_deref())
+  }
+
+  fn slot<'a>(lines: &'a mut StopLines, line: &str, destination: Option<&str>) -> &'a mut Self {
+    lines
+      .entry(ServiceKey::new(line, destination))
+      .or_insert_with(|| Self::empty(line.to_owned(), destination.map(str::to_owned)))
   }
 
   async fn fuse(
@@ -230,30 +248,47 @@ impl StopLine {
     live: &HashMap<String, Line>,
   ) -> StopLines {
     // live upcoming, gtfs backfill up to 3 per line
+    // row destination is the shape's GTFS headsign
+    let shape_ids: Vec<String> =
+      upcoming.values().flatten().filter_map(|u| u.bus.shape_id.clone()).collect::<HashSet<_>>().into_iter().collect();
+    let headsigns = Self::shape_headsigns(&state.db, scope, &shape_ids).await.unwrap_or_default();
+    let mut by_service: HashMap<ServiceKey, (String, Option<String>, Vec<StopArrival>)> = HashMap::new();
     for (line_id, buses) in upcoming {
-      let mut arrivals: Vec<StopArrival> = buses.iter().map(StopArrival::from_upcoming).collect();
-
-      let remaining = 3_usize.saturating_sub(arrivals.len());
-      if remaining > 0
-        && let Some(existing) = lines.get(&line_id)
-      {
-        let deduped = StopArrival::dedup_gtfs_backfill(&arrivals, existing.arrivals.iter().cloned());
-        arrivals.extend(deduped.into_iter().take(remaining));
+      for u in &buses {
+        let destination =
+          u.bus.shape_id.as_ref().and_then(|s| headsigns.get(s)).cloned().or_else(|| u.bus.destination.clone());
+        by_service
+          .entry(ServiceKey::new(&line_id, destination.as_deref()))
+          .or_insert_with(|| (line_id.clone(), destination, vec![]))
+          .2
+          .push(StopArrival::from_upcoming(u));
       }
-      arrivals.truncate(3);
+    }
+    for (key, (line_id, destination, mut arrivals)) in by_service {
+      if let Some(existing) = lines.get(&key) {
+        arrivals.extend(existing.arrivals.iter().cloned());
+      }
+      StopArrival::merge(&mut arrivals);
 
-      let destination = lines.get(&line_id).and_then(|l| l.destination.clone());
-      let company = lines.get(&line_id).map(|l| l.company.clone());
+      let destination = lines.get(&key).and_then(|l| l.destination.clone()).or(destination);
+      let company = lines.get(&key).map(|l| l.company.clone());
 
-      lines.insert(
-        line_id.clone(),
-        StopLine { line: line_id, destination, company: company.unwrap_or_default(), arrivals },
-      );
+      lines.insert(key, StopLine { line: line_id, destination, company: company.unwrap_or_default(), arrivals });
     }
 
-    // non-rt lines from bus positions
-    let non_rt_ids: Vec<String> =
-      lines.iter().filter(|(_, l)| !l.arrivals.first().is_some_and(|a| a.live)).map(|(k, _)| k.clone()).collect();
+    // non-rt services from bus positions
+    let covered: HashSet<ServiceKey> =
+      lines.iter().filter(|(_, l)| l.arrivals.first().is_some_and(|a| a.live)).map(|(k, _)| k.clone()).collect();
+    let claimed: HashSet<String> = lines
+      .values()
+      .flat_map(|l| &l.arrivals)
+      .filter(|a| a.live)
+      .filter_map(|a| a.bus.as_ref().map(|b| b.seen.id.clone()))
+      .collect();
+    let mut non_rt_ids: Vec<String> =
+      lines.iter().filter(|(k, _)| !covered.contains(*k)).map(|(_, l)| l.line.clone()).collect();
+    non_rt_ids.sort();
+    non_rt_ids.dedup();
 
     if !non_rt_ids.is_empty() {
       let all_buses = Line::collect_deduped(&non_rt_ids, live);
@@ -263,33 +298,36 @@ impl StopLine {
         if let Ok(rows) = StopArrival::query_approaching(&state.db, scope, stop_id, &all_buses).await {
           use crate::cache::{BusTracking, bus_key};
           let ghosts = state.cache.tracker().stop_ghosts(scope.region.id(), stop_id).await;
-          let mut computed: HashMap<String, Vec<StopArrival>> = HashMap::new();
+          let mut computed: HashMap<ServiceKey, (String, Option<String>, Vec<StopArrival>)> = HashMap::new();
           for row in rows {
-            let Some(bus) = bus_meta.get(&row.bus_id) else {
+            let Some(bus) = bus_meta.get(&row.bus_id).filter(|_| !claimed.contains(&row.bus_id)) else {
               continue;
             };
-            computed.entry(row.line.clone()).or_default().push(StopArrival::from_approaching_bus(
-              bus,
-              &row,
-              ghosts.contains_key(&bus_key(scope.provider, &row.bus_id)),
-            ));
+            let destination = row.headsign.clone().or_else(|| bus.seen.destination.clone());
+            let arrival =
+              StopArrival::from_approaching_bus(bus, &row, ghosts.contains_key(&bus_key(scope.provider, &row.bus_id)));
+            computed
+              .entry(ServiceKey::new(&row.line, destination.as_deref()))
+              .or_insert_with(|| (row.line.clone(), destination, vec![]))
+              .2
+              .push(arrival);
           }
 
-          for (line_id, mut live_arrivals) in computed {
-            StopArrival::sort_by_eta(&mut live_arrivals);
-            live_arrivals.truncate(3);
+          for (key, (line_id, destination, mut live_arrivals)) in computed {
+            if covered.contains(&key) {
+              continue;
+            }
+            StopArrival::merge(&mut live_arrivals);
             if live_arrivals.is_empty() {
               continue;
             }
 
-            let stop_line = lines.entry(line_id.clone()).or_insert_with(|| Self::empty(line_id));
+            let stop_line = Self::slot(&mut lines, &line_id, destination.as_deref());
             let has_rt = live_arrivals.first().is_some_and(|a| a.live);
 
             if has_rt {
-              let remaining = 3_usize.saturating_sub(live_arrivals.len());
-              let deduped = StopArrival::dedup_gtfs_backfill(&live_arrivals, stop_line.arrivals.iter().cloned());
-              live_arrivals.extend(deduped.into_iter().take(remaining));
-              live_arrivals.truncate(3);
+              live_arrivals.extend(stop_line.arrivals.iter().cloned());
+              StopArrival::merge(&mut live_arrivals);
               stop_line.arrivals = live_arrivals;
             } else if let (Some(first_gtfs), Some(first_live)) =
               (stop_line.arrivals.first_mut(), live_arrivals.into_iter().next())
@@ -346,7 +384,11 @@ impl StopLine {
         };
         tracker.mark_seen(provider, &bus.seen.id).await;
         let key = bus_key(provider, &bus.seen.id);
-        let ghost = StopGhost { arrival: arrival.clone(), line: line_data.line.clone() };
+        let ghost = StopGhost {
+          arrival: arrival.clone(),
+          line: line_data.line.clone(),
+          destination: line_data.destination.clone(),
+        };
         tracker.set_stop_ghost(region, stop_id, &key, ghost.clone()).await;
         ghost_map.insert(key, ghost);
       }
@@ -390,32 +432,24 @@ impl StopLine {
       }
 
       ghost_count += 1;
-      let stop_line = lines.entry(entry.line.clone()).or_insert_with(|| Self::empty(entry.line.clone()));
-      stop_line.arrivals.push(ghost_arrival);
+      Self::slot(lines, &entry.line, entry.destination.as_deref()).arrivals.push(ghost_arrival);
     }
 
     if ghost_count > 0 {
       for stop_line in lines.values_mut() {
-        StopArrival::sort_by_eta(&mut stop_line.arrivals);
-        stop_line.arrivals.truncate(3);
+        StopArrival::merge(&mut stop_line.arrivals);
       }
       tracing::info!(stop = %stop_id, ghosts = ghost_count, "[stops] ghost tracking injected");
     }
   }
 
   fn enrich_snapshots(lines: &mut StopLines, positions: &HashMap<String, Line>) {
-    let line_ids: Vec<String> =
-      lines.iter().filter(|(_, l)| l.arrivals.iter().any(|a| a.bus.is_some())).map(|(k, _)| k.clone()).collect();
-
-    for line in line_ids {
-      let line_buses = match positions.get(&line) {
+    for stop_line in lines.values_mut() {
+      let line_buses = match positions.get(&stop_line.line) {
         Some(l) if !l.buses.is_empty() => &l.buses,
         _ => continue,
       };
 
-      let Some(stop_line) = lines.get_mut(&line) else {
-        continue;
-      };
       for arrival in &mut stop_line.arrivals {
         let Some(snap) = arrival.bus.as_mut() else {
           continue;
@@ -455,7 +489,9 @@ impl StopLine {
   ) {
     const PAST_STOP_MARGIN_M: f64 = 500.0;
 
-    let line_ids: Vec<String> = lines.keys().cloned().collect();
+    let mut line_ids: Vec<String> = lines.values().map(|l| l.line.clone()).collect();
+    line_ids.sort();
+    line_ids.dedup();
     let all_buses = Line::collect_deduped(&line_ids, positions);
     if all_buses.is_empty() {
       return;
@@ -487,8 +523,8 @@ impl StopLine {
       let mut snap = (*bus).clone();
       snap.past_stop = true;
 
-      let stop_line = lines.entry(row.line.clone()).or_insert_with(|| Self::empty(row.line.clone()));
-      stop_line.arrivals.push(StopArrival {
+      let destination = row.headsign.or_else(|| bus.seen.destination.clone());
+      Self::slot(lines, &row.line, destination.as_deref()).arrivals.push(StopArrival {
         eta: None,
         live: false,
         bus: Some(snap),
@@ -512,8 +548,9 @@ impl StopLine {
       .filter_map(|a| a.bus.as_ref().map(|b| b.seen.id.clone()))
       .collect();
 
+    let served: HashSet<&str> = lines.values().map(|l| l.line.as_str()).collect();
     let mut loose: Vec<(String, Bus)> = Vec::new();
-    for (line_id, line) in positions.iter().filter(|(id, _)| lines.contains_key(*id)) {
+    for (line_id, line) in positions.iter().filter(|(id, _)| served.contains(id.as_str())) {
       for bus in &line.buses {
         if known.insert(bus.seen.id.clone()) {
           loose.push((line_id.clone(), bus.clone()));
@@ -532,8 +569,8 @@ impl StopLine {
     };
 
     for (line_id, bus) in loose.into_iter().filter(|(id, _)| shapeless.contains(id)) {
-      let stop_line = lines.entry(line_id.clone()).or_insert_with(|| Self::empty(line_id));
-      stop_line.arrivals.push(StopArrival {
+      let destination = bus.seen.destination.clone();
+      Self::slot(lines, &line_id, destination.as_deref()).arrivals.push(StopArrival {
         eta: None,
         live: false,
         bus: Some(bus),
@@ -594,7 +631,7 @@ impl StopLine {
           interpolated: false,
           stop_position: Some(position),
         };
-        lines.entry(bus.seen.line.clone()).or_insert_with(|| Self::empty(bus.seen.line.clone())).arrivals.push(arrival);
+        Self::slot(lines, &bus.seen.line, bus.seen.destination.as_deref()).arrivals.push(arrival);
       }
     }
   }
@@ -607,7 +644,9 @@ impl StopDetail {
   pub async fn assemble(state: &crate::Transit, scope: &Scope, stop_id: &str) -> crate::Result<Self> {
     // gtfs departures
     let static_lines = StopLine::get(&state.db, scope, stop_id).await?;
-    let line_ids: Vec<String> = static_lines.keys().cloned().collect();
+    let mut line_ids: Vec<String> = static_lines.values().map(|l| l.line.clone()).collect();
+    line_ids.sort();
+    line_ids.dedup();
 
     // provider arrivals + line buses
     let upcoming = async {
@@ -639,13 +678,21 @@ impl StopDetail {
   }
 
   fn from_lines(line_map: StopLines) -> Self {
+    let with_arrivals: HashSet<String> =
+      line_map.values().filter(|l| !l.arrivals.is_empty()).map(|l| l.line.clone()).collect();
     let mut lines: Vec<StopLine> = line_map
       .into_values()
+      // roster line without arrivals dropped if another row has them
+      .filter(|l| !l.arrivals.is_empty() || !with_arrivals.contains(&l.line))
       .map(|mut l| {
+        // sort what was added after merging
+        l.arrivals.sort_by_key(StopArrival::rank);
         let bus = l.arrivals.first().and_then(|a| a.bus.as_ref());
-        l.company = bus.map(|b| b.seen.company.clone()).unwrap_or_default();
-        // destination of the shown bus
-        l.destination = bus.and_then(|b| b.seen.destination.clone()).or(l.destination);
+        if let Some(b) = bus.filter(|b| !b.seen.company.is_empty()) {
+          l.company.clone_from(&b.seen.company);
+        }
+        // roster lines take the bus destination
+        l.destination = l.destination.or_else(|| bus.and_then(|b| b.seen.destination.clone()));
         l
       })
       .collect();

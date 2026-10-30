@@ -14,8 +14,8 @@
     height: var(--tap);
   }
 
-  :global(.maplibregl-ctrl-group button + button) {
-    border-top-color: var(--divider);
+  :global(.maplibregl-ctrl-group > div + div:not(:empty)) {
+    border-top: 1px solid var(--divider);
   }
 }
 

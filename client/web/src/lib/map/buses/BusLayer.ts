@@ -12,6 +12,7 @@ interface Entry {
   setBus: Setter<Bus>;
   setDimmed: Setter<boolean>;
   setReceded: Setter<boolean>;
+  setCompact: Setter<boolean>;
   dispose: () => void;
   from: LngLat;
   to: LngLat;
@@ -35,7 +36,13 @@ export class BusLayer {
   ) {}
 
   // far or with a route, off-route buses shrink and fade
-  render(buses: Bus[], focusId: string | null = null, shape: RouteShape | null = null, far = false) {
+  render(
+    buses: Bus[],
+    focusId: string | null = null,
+    shape: RouteShape | null = null,
+    far = false,
+    line: string | null = null
+  ) {
     const seen = new Set<string>();
     const now = performance.now();
     this.#focus[1](focusId);
@@ -48,7 +55,10 @@ export class BusLayer {
 
       entry.setBus(bus); // no remount, keeps the animation
       entry.setDimmed(offRoute);
-      entry.setReceded(bus.id !== focusId && (far || focusId !== null || shape !== null));
+      // known line's buses never shrink
+      const compact = line !== null && bus.line === line;
+      entry.setCompact(compact);
+      entry.setReceded(bus.id !== focusId && (offRoute || (far && !compact)));
       entry.marker.getElement().style.zIndex = bus.id === focusId ? '1' : '';
       this.#moveTo(entry, [bus.location.lng, bus.location.lat], now);
     }
@@ -120,6 +130,7 @@ export class BusLayer {
     const [bus, setBus] = createSignal(initial);
     const [dimmed, setDimmed] = createSignal(false);
     const [receded, setReceded] = createSignal(false);
+    const [compact, setCompact] = createSignal(false);
     const [focus] = this.#focus;
     const onSelect = this.onSelect;
     const dispose = render(
@@ -133,6 +144,9 @@ export class BusLayer {
           },
           get receded() {
             return receded();
+          },
+          get compact() {
+            return compact();
           },
           get selected() {
             return focus() === bus().id;
@@ -148,6 +162,7 @@ export class BusLayer {
       setBus,
       setDimmed,
       setReceded,
+      setCompact,
       dispose,
       from: at,
       to: at,

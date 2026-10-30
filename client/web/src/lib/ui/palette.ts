@@ -58,12 +58,15 @@ export function companyOutlineVar(company: string | undefined): string {
   return slug ? `var(--company-${slug}-outline)` : 'var(--text-hint)';
 }
 
+// lower in dark, the map uses companyPinVar
+export function companySheetVar(company: string | undefined): string {
+  return `oklch(from ${companyPinVar(company)} calc(l * var(--company-sheet-lightness)) c h)`;
+}
+
 // unknown -> urban
-export function companyTint(company: string | undefined): {header: string; list: string} {
+export function companyListVar(company: string | undefined): string {
   const slug = companySlug(company);
-  return slug
-    ? {header: `var(--company-${slug}-header)`, list: `var(--company-${slug}-list)`}
-    : {header: 'var(--service-urban-header)', list: 'var(--service-urban-list)'};
+  return slug ? `var(--company-${slug}-list)` : 'var(--service-urban-list)';
 }
 
 // schedule in text color

@@ -31,10 +31,16 @@
   opacity: 0.45;
 }
 
+/* --bus-scale set from the zoom */
+.badge,
+.dir {
+  scale: var(--bus-scale, 1);
+}
+
 .receded {
   .badge,
   .dir {
-    scale: 0.75;
+    scale: calc(var(--bus-scale, 1) * 0.75);
   }
 
   .company {
@@ -80,6 +86,19 @@
   }
 }
 
+/* same circle as the stops track */
+.compact {
+  width: 28px;
+  padding: 5px;
+  border-radius: 50%;
+
+  svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+
 .dir {
   position: absolute;
   top: 50%;
@@ -106,7 +125,7 @@
 
 .company {
   position: absolute;
-  top: calc(50% + 16px);
+  top: calc(50% + 16px * var(--bus-scale, 1));
   left: 50%;
   translate: -50% 0;
   color: var(--text-primary);
@@ -121,7 +140,8 @@
     0 0 3px var(--surface);
 }
 
-.still {
+/* stopped live only */
+.still.live {
   opacity: 0.8;
 
   &.dimmed {
@@ -140,4 +160,44 @@
 
 .imprecise .badge {
   border-style: dotted;
+}
+
+/* above pin and arrow */
+.tip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(50% + 28px * var(--bus-scale, 1));
+  z-index: 1;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* hovered marker to the front */
+:global(.maplibregl-marker:has(> .pin:hover)) {
+  z-index: 3 !important;
+}
+
+.tipLine {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 1.75rem;
+  height: 1.375rem;
+  padding: 0 var(--space-1);
+  border-radius: calc(var(--radius-sm) * 0.75);
+  background: var(--pin);
+  color: var(--service-header-on);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.meta {
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: var(--meta);
+  color: var(--service-header-on);
 }

@@ -71,7 +71,7 @@ export default function StopSheet(props: {
           fallback={
             <>
               <Show when={props.failed}>
-                <p class={styles.stale}>No pudimos actualizar el tiempo real. Lo que ves puede no estar al día.</p>
+                <p class={styles.stale}>No se pudo actualizar el tiempo real. Lo que ves puede no estar al día.</p>
               </Show>
               <ul class={`${styles.lines} sheet-scroll`}>
                 <For each={props.arrivals}>

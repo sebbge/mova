@@ -1,0 +1,57 @@
+.tip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: 16rem;
+  /* always two lines tall */
+  min-height: calc(var(--text-sm) * 1.25 * 2 + var(--space-1) * 2);
+  padding: var(--space-1) var(--space-3) var(--space-1) var(--space-1);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-float);
+  pointer-events: none;
+  animation: appear 0.12s var(--ease-out);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  line-height: 1.25;
+  text-wrap: balance;
+}
+
+.subtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  line-height: 1.25;
+}
+
+.trail {
+  display: flex;
+  flex: none;
+  gap: var(--space-1);
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+  }
+}

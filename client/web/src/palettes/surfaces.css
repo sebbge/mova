@@ -9,14 +9,10 @@
   --skeleton-sheen: oklch(0.968 0.004 286.33);
   --scrollbar: oklch(0 0 0 / 0.2);
   --sheet: oklch(1 0 0);
-  --bar-fill: oklch(0.5613 0.1438 153.23);
   --shadow: 0 1px 3px oklch(0 0 0 / 0.1);
   --shadow-float: 0 4px 16px oklch(0 0 0 / 0.18);
   --shadow-sheet: 0 -4px 24px oklch(0 0 0 / 0.22);
   --shadow-pin: 0 1px 4px oklch(0 0 0 / 0.35);
-
-  --tint-text-min: 0;
-  --tint-text-max: 0.52;
 
   color-scheme: light;
 }
@@ -32,10 +28,7 @@
   --skeleton-sheen: oklch(0.3211 0 0);
   --scrollbar: oklch(1 0 0 / 0.2);
   --sheet: oklch(0.2264 0 0);
-  --bar-fill: oklch(0.2805 0.0321 161.64);
   --shadow: none;
-  --tint-text-min: 0.74;
-  --tint-text-max: 1;
 
   color-scheme: dark;
 }

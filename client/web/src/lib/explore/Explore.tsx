@@ -2,6 +2,7 @@ import {createEffect, Match, Show, Switch} from 'solid-js';
 import BusSheet from '~/lib/bus/BusSheet';
 import {MAP_CAMERA} from '~/lib/domain/regions';
 import LineSheet from '~/lib/line/LineSheet';
+import ScheduleSheet from '~/lib/line/ScheduleSheet';
 import MapCanvas from '~/lib/map/MapCanvas';
 import StopSheet from '~/lib/stop/StopSheet';
 import TripSearch from '~/lib/trip/TripSearch';
@@ -29,13 +30,14 @@ export default function Explore() {
           camera={MAP_CAMERA}
           shape={selection.line.shape}
           routeCompany={selection.routeCompany}
+          routeLine={selection.fleet.selected?.line ?? selection.lineId}
           buses={selection.fleet.all}
-          selectedStopId={selection.stopId}
-          selectedSiblings={selection.stops.refs}
+          selectedStopId={selection.mapStopId}
+          selectedSiblings={selection.previewStop ? [] : selection.stops.refs}
           selectedStop={selection.stops.stop}
           selectedBusId={selection.busId}
           followBusId={selection.followBusId}
-          onSelectStop={(id, name) => selection.openStop(id, name)}
+          onSelectStop={(id, name) => selection.selectMapStop(id, name)}
           onSelectBus={(bus) => selection.tapBus(bus)}
           onBackground={() => selection.deselectBus()}
           onView={(center, km2) => selection.onView(center, km2)}
@@ -76,6 +78,22 @@ export default function Explore() {
                   bus={bus()}
                   direction={selection.fleet.direction}
                   onShowLine={selection.lineId === bus().line ? () => selection.showLine() : undefined}
+                  previewStop={selection.previewStop}
+                  onSelectStop={(id, name) => selection.pickBusStop(id, name)}
+                />
+              )}
+            </Match>
+            <Match when={selection.scheduleOpen && selection.lineId}>
+              {(line) => (
+                <ScheduleSheet
+                  line={line()}
+                  routeId={selection.routeId}
+                  company={selection.lineCompany}
+                  stop={selection.lineStop}
+                  headsign={selection.line.shape?.headsign}
+                  schedule={selection.line.schedule}
+                  failed={selection.line.scheduleFailed}
+                  onDay={(day) => selection.pickScheduleDay(day)}
                 />
               )}
             </Match>
@@ -90,8 +108,15 @@ export default function Explore() {
                   origin={selection.line.origin}
                   company={selection.lineCompany}
                   loading={selection.settlingLine}
+                  selected={{id: selection.stopId, siblings: selection.stops.refs}}
+                  times={selection.line.times}
+                  buses={selection.line.buses}
+                  arrivals={selection.stops.arrivals}
+                  arrivalsLoading={selection.stops.loading}
                   onSelect={(routeId, direction) => selection.selectVariant(routeId, direction)}
-                  onSelectStop={(id, name) => selection.openStop(id, name)}
+                  onSelectStop={(id) => selection.pickLineStop(id)}
+                  onOpenStop={(id, name) => selection.openStopFromLine(id, name)}
+                  onSchedule={() => selection.openSchedule()}
                 />
               )}
             </Match>

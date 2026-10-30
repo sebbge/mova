@@ -1,40 +1,40 @@
-import {
-  addProtocol,
-  GeolocateControl,
-  LngLatBounds,
-  Map as MapLibreMap,
-  NavigationControl,
-  setWorkerUrl,
-} from 'maplibre-gl';
+import {addProtocol, LngLatBounds, Map as MapLibreMap, setWorkerUrl} from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import {Protocol} from 'pmtiles';
 import {createEffect, createMemo, createSignal, Match, on, onCleanup, onMount, Show, Switch} from 'solid-js';
 import type {FeatureCollection} from 'geojson';
 import type {Bus, RouteShape} from '~/lib/api/types';
+import {stopServices, type Service} from '~/lib/domain/providers';
 import {DEFAULT_REGION, regionsInView, type MapCamera} from '~/lib/domain/regions';
+import {isSelected} from '~/lib/domain/selection';
 import {theme} from '~/lib/ui/theme';
 import BusGuide from './BusGuide';
 import {BusLayer} from './buses/BusLayer';
+import {hoverStops} from './hoverStops';
 import {routeLayer, type RouteView} from './layers/route';
 import {stopsLayer} from './layers/stops';
 import {terminalsLayer} from './layers/terminals';
 import {tripLayer} from './layers/trip';
+import {MapButtons} from './MapButtons';
 import styles from './MapCanvas.module.css';
 import {RegionStops} from './RegionStops';
 import {RouteTrack} from './RouteTrack';
 import {ATTRIBUTION, basemapStyle} from './style';
+import StopTooltip, {type StopHover} from './StopTooltip';
 import {fitCountry, overlaps, sheetOffset, STOPS_MAX_KM2, stopsZoom, viewportKm2} from './viewport';
 
 const CAMERA_MS = 400;
 const FOCUS_MS = 500;
 const FOLLOW_MS = 600;
 const FAR_ZOOM = 13; // under it buses shrink
+const BUS_GROWTH = 0.45; // growth by z17, 28px -> ~40
 
 export default function MapCanvas(props: {
   camera: MapCamera;
   shape: RouteShape | null; // one direction
   routeCompany?: string;
+  routeLine?: string | null; // compact pins
   buses: Bus[];
   selectedStopId: string | null;
   selectedSiblings: readonly string[];
@@ -58,8 +58,13 @@ export default function MapCanvas(props: {
   const tooWide = () => viewKm2() > STOPS_MAX_KM2;
   const stops = new RegionStops();
   const track = createMemo(() => (props.shape?.shape ? new RouteTrack(props.shape.shape, props.shape.stops) : null));
-  const isSelectedStop = (id: string) => id === props.selectedStopId || props.selectedSiblings.includes(id);
-  const routeView = (): RouteView => ({shape: props.shape, track: track(), isSelected: isSelectedStop});
+  const selection = () => ({id: props.selectedStopId, siblings: props.selectedSiblings});
+  const routeView = (): RouteView => ({
+    shape: props.shape,
+    track: track(),
+    isSelected: (id) => isSelected(selection(), id),
+  });
+  const [hovered, setHovered] = createSignal<StopHover | null>(null);
 
   onMount(() => {
     void stops.load([DEFAULT_REGION]);
@@ -117,10 +122,15 @@ export default function MapCanvas(props: {
     };
 
     // top, the sheet covers the bottom
-    instance.addControl(new NavigationControl(), 'top-right');
-    instance.addControl(new GeolocateControl({trackUserLocation: true, showAccuracyCircle: true}), 'top-right');
+    instance.addControl(new MapButtons(), 'top-right');
 
-    const stepZoom = () => setZoomStep(Math.floor(instance.getZoom() * 2) / 2);
+    // z14 to z17
+    const stepZoom = () => {
+      const grown = Math.min(1, Math.max(0, (instance.getZoom() - 14) / 3));
+      container.style.setProperty('--bus-scale', String(1 + BUS_GROWTH * grown));
+      setZoomStep(Math.floor(instance.getZoom() * 2) / 2);
+    };
+    stepZoom();
     instance.on('zoom', stepZoom);
 
     instance.on('load', () => {
@@ -145,6 +155,15 @@ export default function MapCanvas(props: {
       instance.on('mouseenter', layer, () => (instance.getCanvas().style.cursor = 'pointer'));
       instance.on('mouseleave', layer, () => (instance.getCanvas().style.cursor = ''));
     }
+    // service from the shelter
+    hoverStops(instance, stopHits, (hit) => {
+      if (!hit) return setHovered(null);
+      const known = stops.find(hit.cluster);
+      const services = hit.service ? (hit.service.split('+') as Service[]) : known ? stopServices(known) : [];
+      const {x, y} = instance.project([hit.at.lng, hit.at.lat]);
+      setHovered({name: hit.name, services, x, y});
+    });
+
     instance.on('click', (e) => {
       if (instance.queryRenderedFeatures(e.point, {layers: hits}).length > 0) return;
       if (props.picking) props.onPick?.({lat: e.lngLat.lat, lng: e.lngLat.lng});
@@ -171,7 +190,11 @@ export default function MapCanvas(props: {
 
     const buses = new BusLayer(instance, (bus) => props.onSelectBus?.(bus));
     /* eslint-enable solid/reactivity */
-    createEffect(() => map() && buses.render(props.buses, props.selectedBusId, props.shape, zoomStep() < FAR_ZOOM));
+    createEffect(
+      () =>
+        map() &&
+        buses.render(props.buses, props.selectedBusId, props.shape, zoomStep() < FAR_ZOOM, props.routeLine ?? null)
+    );
 
     onCleanup(() => {
       buses.destroy();
@@ -258,10 +281,8 @@ export default function MapCanvas(props: {
         <Match when={error()}>
           <p class={`${styles.banner} ${styles.error}`}>{error()}</p>
         </Match>
-        <Match when={tooWide() && !props.shape}>
-          <p class={styles.banner}>Acercá el mapa para ver las paradas</p>
-        </Match>
       </Switch>
+      <Show when={hovered()}>{(hover) => <StopTooltip {...hover()} />}</Show>
       <Show when={map()}>
         {(m) => <BusGuide map={m()} bus={props.buses.find((b) => b.id === props.selectedBusId)} />}
       </Show>

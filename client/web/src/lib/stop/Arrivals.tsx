@@ -25,7 +25,7 @@ export default function Arrivals(props: {stopId: string; split?: boolean}) {
         fallback={
           <>
             <Show when={source.liveFailed}>
-              <p class={styles.note}>No pudimos actualizar el tiempo real. Lo que ves puede no estar al día.</p>
+              <p class={styles.note}>No se pudo actualizar el tiempo real. Lo que ves puede no estar al día.</p>
             </Show>
             <ul class='rows'>
               <For each={source.lines}>

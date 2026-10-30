@@ -14,6 +14,7 @@ use tokio::time::Instant;
 pub struct StopGhost {
   pub arrival: StopArrival,
   pub line: String,
+  pub destination: Option<String>,
 }
 
 /// Buses keyed by provider, stops by region

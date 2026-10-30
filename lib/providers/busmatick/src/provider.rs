@@ -61,7 +61,7 @@ impl Feed for Codesa {
     let gtfs = tokio::task::spawn_blocking(move || codesa::synthesize(&trips, &variants))
       .await
       .map_err(|e| Error::External(format!("feed synthesis panicked: {e}")))??;
-    Ok(Static { gtfs, lines_by_stop: None })
+    Ok(Static { gtfs, lines_by_stop: None, headsigns: None })
   }
 }
 
@@ -108,7 +108,7 @@ impl Feed for Solantigua {
       Ok(shapes) => *self.shapes.write().await = Some(Arc::new(shapes)),
       Err(e) => tracing::warn!(error = ?e, "[solantigua/gtfs] no shape index, buses go unbound"),
     }
-    Ok(Static { gtfs, lines_by_stop: None })
+    Ok(Static { gtfs, lines_by_stop: None, headsigns: None })
   }
 }
 

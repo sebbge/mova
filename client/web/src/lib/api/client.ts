@@ -5,8 +5,11 @@ import type {
   Itinerary,
   Payment,
   PlaceHit,
+  DayType,
   RegionBus,
+  RouteSchedule,
   RouteShape,
+  RouteTimes,
   Stop,
   StopDetail,
   StopHit,
@@ -54,6 +57,20 @@ export const api = {
     gtfs<RouteShape>(`/route/shape/${refPath(routeRef)}${query({direction_id: directionId})}`, o),
 
   shape: (shapeRef: string, o?: Options) => gtfs<RouteShape>(`/shape/${refPath(shapeRef)}`, o),
+
+  // without 'day' the server marks the next departure
+  routeSchedule: (routeRef: string, at: {direction: number; stop: string; day: DayType | null}, o?: Options) =>
+    request<RouteSchedule>(
+      `/route/schedule/${refPath(routeRef)}${query({direction_id: at.direction, stop: at.stop, day: at.day ?? undefined})}`,
+      o
+    ),
+
+  // changes with the clock, outside the gtfs memo
+  routeTimes: (routeRef: string, at: {direction: number; shapeId: string | null; stop: string | null}, o?: Options) =>
+    request<RouteTimes>(
+      `/route/times/${refPath(routeRef)}${query({direction_id: at.direction, shape_id: at.shapeId ?? undefined, stop: at.stop ?? undefined})}`,
+      o
+    ),
 
   lineBuses: (provider: string, line: string, o?: Options) =>
     request<Bus[]>(`/line/buses/${provider}/${encodeURIComponent(line)}`, o),

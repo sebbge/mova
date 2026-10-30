@@ -6,6 +6,15 @@ use crate::sdk::{arrivals::UpcomingArrival, vehicles::BusEntry};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer};
 
+//# GET <MVD>/buses/linevariants
+// `lineVariantId` is the GTFS `shape_id`
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StmLineVariant {
+  pub line_variant_id: u32,
+  pub destination: Option<String>,
+}
+
 // common bus fields
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -24,7 +24,7 @@ impl Feed for Dnt {
     let lines_by_stop =
       roster.inspect_err(|e| tracing::warn!(error = ?e, "[dnt/roster] unavailable, continuing without it")).ok();
 
-    Ok(Static { gtfs: gtfs?, lines_by_stop })
+    Ok(Static { gtfs: gtfs?, lines_by_stop, headsigns: None })
   }
 
   fn route(&self, raw: &str) -> String {
@@ -76,7 +76,7 @@ impl Feed for Inter {
     .map_err(|e| Error::External(format!("feed synthesis panicked: {e}")))??;
 
     *self.index.write().await = Some(Arc::new(index));
-    Ok(Static { gtfs, lines_by_stop: None })
+    Ok(Static { gtfs, lines_by_stop: None, headsigns: None })
   }
 }
 

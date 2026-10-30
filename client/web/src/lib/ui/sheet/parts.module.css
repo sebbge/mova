@@ -13,8 +13,3 @@
   --skeleton-sheen: var(--skeleton-on-tint-sheen);
   --scrollbar: var(--scrollbar-on-tint);
 }
-
-.band.onTint {
-  --skeleton: var(--skeleton-on-header);
-  --skeleton-sheen: var(--skeleton-on-header-sheen);
-}

@@ -81,7 +81,7 @@ export default function Sheet(props: {
         class={styles.sheet}
         classList={{[styles.dragging]: dragging()}}
         style={{
-          '--sheet-nav-start': props.onBack ? 'var(--tap)' : undefined,
+          '--sheet-nav-start': props.onBack ? '36px' : undefined,
           height: `${SNAPS[snap()] * 100}dvh`,
           transform: `translateY(${Math.max(0, dragOffset())}px)`,
         }}>

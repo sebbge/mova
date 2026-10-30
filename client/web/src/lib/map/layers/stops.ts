@@ -1,15 +1,7 @@
 import type {FeatureCollection} from 'geojson';
 import type {ExpressionSpecification, GeoJSONSource, Map as MapLibreMap, SymbolLayerSpecification} from 'maplibre-gl';
 import type {StopItem} from '~/lib/api/types';
-import {
-  comboKey,
-  isTerminalStop,
-  providerInfo,
-  SERVICE_COMBOS,
-  SERVICES,
-  serviceOf,
-  type Service,
-} from '~/lib/domain/providers';
+import {comboKey, isTerminalStop, SERVICE_COMBOS, stopServices, type Service} from '~/lib/domain/providers';
 import {STOP_PIN_PIXEL_RATIO, stopDotImage, stopPinImage} from '~/lib/map/images/stopPin';
 import {mapText} from '~/lib/map/paint';
 
@@ -149,9 +141,6 @@ function features(stops: StopItem[], marks: StopsMarks): FeatureCollection {
   return {
     type: 'FeatureCollection',
     features: stops.map((stop) => {
-      const services = new Set(
-        stop.providers ? stop.providers.map((p) => providerInfo(p).service) : [serviceOf(stop.id)]
-      );
       const selected = stop.id === marks.selectedId || marks.siblings.includes(stop.id);
       return {
         type: 'Feature' as const,
@@ -165,7 +154,7 @@ function features(stops: StopItem[], marks: StopsMarks): FeatureCollection {
           stop_id: stop.id,
           stop_name: stop.name,
           platform: stop.platform ? `A${stop.platform}` : '',
-          service: comboKey(SERVICES.filter((s) => services.has(s))),
+          service: comboKey(stopServices(stop)),
           dim: marks.dim && !selected,
           muted: marks.selectedId != null && !selected,
           selected,
