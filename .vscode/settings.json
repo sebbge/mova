@@ -1,4 +1,15 @@
 {
+  "files.exclude": {
+    ".artifact": true,
+    "**/.astro": true,
+    "**/node_modules": true,
+    "**/.prettierignore": true,
+    "**/pnpm-workspace.yaml": true,
+    "**/pnpm-lock.yaml": true,
+    "**/Cargo.lock": true,
+    "**/tsconfig.json": true
+  },
+
   "better-comments.tags": [
     //# TITLES
     {
@@ -124,20 +135,30 @@
   "material-icon-theme.folders.associations": {
     "transit": "routes",
     "entities": "metro",
-    "sdk": "tools"
+    "sdk": "tools",
+    "stm": "../../../../icons/stm",
+    "busmatick": "../../../../icons/busmatick",
+    "dnt": "../../../../icons/dnt",
+    "inter": "../../../../icons/inter"
   },
   "material-icon-theme.files.customClones": [
     {
-      "name": "rust-mod",
+      "name": "rust-main",
       "base": "rust",
-      "color": "blue-400",
-      "fileNames": ["mod.rs"]
+      "color": "red-500",
+      "fileNames": ["main.rs"]
     },
     {
       "name": "rust-lib",
       "base": "rust",
       "color": "green-400",
       "fileNames": ["lib.rs"]
+    },
+    {
+      "name": "rust-mod",
+      "base": "rust",
+      "color": "blue-400",
+      "fileNames": ["mod.rs"]
     }
   ]
 }

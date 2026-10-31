@@ -3,13 +3,12 @@ use mova_sdk as sdk;
 mod cache;
 pub mod entities;
 mod error;
-mod helpers;
 pub mod scope;
 mod tasks;
 
 use self::cache::Cache;
+pub use self::cache::Encoding;
 pub use self::error::{Error, Result};
-pub use self::helpers::{Encoding, secs_to_midnight};
 use self::scope::Scope;
 use self::sdk::{provider::Provider, vehicles::Vehicles};
 
@@ -19,13 +18,6 @@ use std::sync::Arc;
 pub type Db = sqlx::PgPool;
 
 pub type GtfsVersions = Arc<tokio::sync::RwLock<BTreeMap<String, String>>>;
-
-fn versions_token(versions: &BTreeMap<String, String>) -> String {
-  if versions.is_empty() {
-    return "none".into();
-  }
-  versions.iter().map(|(p, v)| format!("{p}={v}")).collect::<Vec<_>>().join(";")
-}
 
 pub struct TransitConfig {
   pub database_url: String,
@@ -80,7 +72,6 @@ impl Transit {
       #[cfg(debug_assertions)]
       {
         // DEBUG: force cache cold start
-        use cache::Flush;
         cache.flush_region(provider.authority).await;
       }
     }
@@ -115,7 +106,15 @@ impl Transit {
   }
 
   pub async fn versions_token(&self) -> String {
-    versions_token(&*self.gtfs_versions.read().await)
+    let versions = self.gtfs_versions.read().await;
+    if versions.is_empty() {
+      return "none".into();
+    }
+    versions.iter().map(|(p, v)| format!("{p}={v}")).collect::<Vec<_>>().join(";")
+  }
+
+  pub fn until_midnight(&self) -> u64 {
+    Cache::until_midnight()
   }
 
   pub async fn fare_products(&self) -> Vec<sdk::fares::FareProduct> {
@@ -139,7 +138,6 @@ impl Transit {
   }
 
   pub async fn realtime(&self) -> BTreeMap<String, bool> {
-    use self::cache::BusTracking;
     use self::entities::bus::Line;
 
     let mut realtime = BTreeMap::new();

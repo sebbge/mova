@@ -1,5 +1,7 @@
 mod bus_tracker;
-pub use bus_tracker::{BusTracker, StopGhost, Tracked, bus_key, split_bus_key};
+mod encoding;
+pub use bus_tracker::{BusTracker, StopGhost, Tracked, TrailPoint};
+pub use encoding::Encoding;
 
 use redis::AsyncCommands;
 
@@ -10,8 +12,11 @@ pub(super) struct Cache {
   bus_tracker: BusTracker,
 }
 impl Cache {
+  /// Region prefix
+  pub const SHARED: &str = "all";
+
   pub(super) fn new(conn: Conn, sync: i64) -> Self {
-    Self { conn, sync, bus_tracker: BusTracker::new() }
+    Self { conn, sync, bus_tracker: BusTracker::default() }
   }
 
   pub fn until_sync(&self) -> u64 {
@@ -22,18 +27,18 @@ impl Cache {
   }
 }
 
-/// Region prefix
-pub const SHARED: &str = "all";
+impl Cache {
+  pub fn key(region: &str, rest: &str) -> String {
+    format!("{region}:{rest}")
+  }
 
-pub fn key(region: &str, rest: &str) -> String {
-  format!("{region}:{rest}")
-}
+  pub fn until_midnight() -> u64 {
+    use chrono::{Local, Timelike};
+    let now = Local::now();
+    (86_400 - now.num_seconds_from_midnight() as u64).max(1)
+  }
 
-pub trait CacheRw {
-  async fn get<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T>;
-  async fn set<T: serde::Serialize>(&self, key: &str, val: &T, ttl: u64);
-
-  async fn get_or_load<T, F>(&self, key: &str, ttl: u64, load: F) -> crate::Result<T>
+  pub async fn get_or_load<T, F>(&self, key: &str, ttl: u64, load: F) -> crate::Result<T>
   where
     T: serde::Serialize + serde::de::DeserializeOwned,
     F: Future<Output = crate::Result<T>>,
@@ -45,63 +50,43 @@ pub trait CacheRw {
     self.set(key, &value, ttl).await;
     Ok(value)
   }
-}
-impl CacheRw for Cache {
-  async fn get<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
+
+  pub async fn get<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
     let mut conn = self.conn.clone();
     conn.get::<_, String>(key).await.ok().and_then(|s| serde_json::from_str(&s).ok())
   }
 
-  async fn set<T: serde::Serialize>(&self, key: &str, val: &T, ttl: u64) {
+  pub async fn set<T: serde::Serialize>(&self, key: &str, val: &T, ttl: u64) {
     if let Ok(json) = serde_json::to_string(val) {
       let mut conn = self.conn.clone();
       let _: Result<(), _> = conn.set_ex(key, json, ttl).await;
     }
   }
-}
 
-/// Precompressed bodies stay bytes
-pub trait CacheBytes {
-  async fn get_bytes(&self, key: &str) -> Option<Vec<u8>>;
-  async fn set_bytes(&self, key: &str, val: &[u8], ttl: u64);
-}
-impl CacheBytes for Cache {
-  async fn get_bytes(&self, key: &str) -> Option<Vec<u8>> {
+  /// Precompressed bodies stay bytes
+  pub async fn get_bytes(&self, key: &str) -> Option<Vec<u8>> {
     let mut conn = self.conn.clone();
     conn.get::<_, Vec<u8>>(key).await.ok().filter(|b| !b.is_empty())
   }
 
-  async fn set_bytes(&self, key: &str, val: &[u8], ttl: u64) {
+  pub async fn set_bytes(&self, key: &str, val: &[u8], ttl: u64) {
     let mut conn = self.conn.clone();
     let _: Result<(), _> = conn.set_ex(key, val, ttl).await;
   }
-}
 
-pub trait BusTracking {
-  fn tracker(&self) -> &BusTracker;
-}
-impl BusTracking for Cache {
-  fn tracker(&self) -> &BusTracker {
+  pub fn tracker(&self) -> &BusTracker {
     &self.bus_tracker
   }
-}
 
-//# after a feed sync
-pub trait Flush {
-  async fn flush_region(&self, region: crate::sdk::region::Region);
-}
-
-impl Flush for Cache {
-  async fn flush_region(&self, region: crate::sdk::region::Region) {
-    for prefix in [region.id(), SHARED] {
+  //# after a feed sync
+  pub async fn flush_region(&self, region: crate::sdk::region::Region) {
+    for prefix in [region.id(), Self::SHARED] {
       if let Err(e) = self.drop_prefix(&format!("{prefix}:")).await {
         tracing::warn!(prefix, error = %e, "[cache] couldn't flush region")
       }
     }
   }
-}
 
-impl Cache {
   /// `SCAN`, not the blocking `KEYS`
   async fn drop_prefix(&self, prefix: &str) -> redis::RedisResult<usize> {
     let mut conn = self.conn.clone();

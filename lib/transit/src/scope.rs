@@ -16,6 +16,10 @@ impl Scope {
     Self { region: handle.authority, provider: handle.id, handle }
   }
 
+  pub fn qualify(provider: &str, id: &str) -> String {
+    format!("{provider}-{id}")
+  }
+
   pub fn vehicles(&self) -> Option<&Vehicles> {
     self.handle.vehicles.as_ref()
   }
@@ -23,8 +27,4 @@ impl Scope {
   pub fn arrivals(&self) -> Option<&dyn Arrivals> {
     self.handle.arrivals.as_deref()
   }
-}
-
-pub fn qualify(provider: &str, id: &str) -> String {
-  format!("{provider}-{id}")
 }

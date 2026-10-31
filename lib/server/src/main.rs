@@ -51,7 +51,7 @@ impl Server {
       .route("/buses", get(handlers::bus::list))
       .route("/stop/arrivals/{provider}/{id}", get(handlers::stop::arrivals))
       .route("/stop/buses/{provider}/{id}", get(handlers::stop::buses))
-      .route("/line/buses/{provider}/{id}", get(handlers::line::buses))
+      .route("/line/buses/{provider}/{id}", get(handlers::bus::line))
       .route("/route/times/{provider}/{id}", get(handlers::routes::times))
       .route("/route/schedule/{provider}/{id}", get(handlers::routes::schedule))
       .route("/plan", get(handlers::plan::plan));
@@ -69,7 +69,6 @@ impl Server {
 #[derive(Clone)]
 struct State(Arc<Server>);
 impl State {
-  #[allow(clippy::expect_used)]
   async fn build() -> State {
     dotenvy::dotenv().ok();
 
@@ -77,21 +76,7 @@ impl State {
     let redis_url = std::env::var("REDIS_URL").expect("REDIS_URL must be set");
     let rebuild_webhook = std::env::var("REBUILD_WEBHOOK_URL").ok().filter(|u| !u.trim().is_empty());
 
-    let providers: Vec<Arc<Provider>> = vec![
-      Arc::new(provider::stm::provider(stm_conf()).expect("stm: invalid config")),
-      Arc::new(provider::dnt::metropolitan().expect("dnt: invalid config")),
-      Arc::new(provider::dnt::interdepartmental().expect("inter: invalid config")),
-      Arc::new(provider::busmatick::codesa(busmatick_conf("CODESA_URL")).expect("codesa: invalid config")),
-      Arc::new(provider::busmatick::mdoturismo(busmatick_conf("MDOTURISMO_URL")).expect("mdoturismo: invalid config")),
-      Arc::new(provider::busmatick::micro(busmatick_conf("MICRO_URL")).expect("micro: invalid config")),
-      Arc::new(provider::busmatick::solantigua(busmatick_conf("SOLANTIGUA_URL")).expect("solantigua: invalid config")),
-      Arc::new(provider::busmatick::copay(busmatick_conf("COPAY_URL")).expect("copay: invalid config")),
-      Arc::new(
-        provider::busmatick::microrivera(busmatick_conf("MICRORIVERA_URL")).expect("microrivera: invalid config"),
-      ),
-    ];
-
-    let config = TransitConfig { database_url, redis_url, providers, rebuild_webhook };
+    let config = TransitConfig { database_url, redis_url, providers: Server::providers(), rebuild_webhook };
     let transit = Transit::connect(config).await.expect("failed to start transit");
 
     let planner = Planner::start(transit.clone());
@@ -100,60 +85,70 @@ impl State {
   }
 }
 
-fn stm_conf() -> provider::stm::StmConfig {
-  let var = |key: &str| std::env::var(key).unwrap_or_default();
-  provider::stm::StmConfig {
-    api_url: var("IM_API_URL"),
-    auth_url: var("IM_AUTH_URL"),
-    client_id: var("IM_CLIENT_ID"),
-    client_secret: var("IM_CLIENT_SECRET"),
+impl Server {
+  fn providers() -> Vec<Arc<Provider>> {
+    use provider::{busmatick, dnt, stm};
+
+    let var = |key: &str| std::env::var(key).unwrap_or_default();
+    let stm = stm::StmConfig {
+      api_url: var("IM_API_URL"),
+      auth_url: var("IM_AUTH_URL"),
+      client_id: var("IM_CLIENT_ID"),
+      client_secret: var("IM_CLIENT_SECRET"),
+    };
+    let base = |key: &str| busmatick::BusmatickConfig { base: var(key) };
+
+    [
+      ("stm", stm::provider(stm)),
+      ("dnt", dnt::metropolitan()),
+      ("inter", dnt::interdepartmental()),
+      ("codesa", busmatick::codesa(base("CODESA_URL"))),
+      ("mdoturismo", busmatick::mdoturismo(base("MDOTURISMO_URL"))),
+      ("micro", busmatick::micro(base("MICRO_URL"))),
+      ("solantigua", busmatick::solantigua(base("SOLANTIGUA_URL"))),
+      ("copay", busmatick::copay(base("COPAY_URL"))),
+      ("microrivera", busmatick::microrivera(base("MICRORIVERA_URL"))),
+    ]
+    .into_iter()
+    .map(|(name, provider)| Arc::new(provider.unwrap_or_else(|e| panic!("{name}: invalid config: {e:?}"))))
+    .collect()
+  }
+
+  fn cors() -> tower_http::cors::CorsLayer {
+    use axum::http::{HeaderValue, Method};
+    use tower_http::cors::CorsLayer;
+
+    if cfg!(debug_assertions) {
+      tracing::warn!("[cors] all origins (debug)");
+      return CorsLayer::permissive();
+    }
+
+    let raw = std::env::var("CORS_ORIGINS").unwrap_or_default();
+    let origins: Vec<HeaderValue> =
+      raw.split(',').map(str::trim).filter(|o| !o.is_empty()).filter_map(|o| o.parse().ok()).collect();
+
+    if origins.is_empty() {
+      panic!("CORS_ORIGINS must be set");
+    }
+
+    tracing::info!(count = origins.len(), "[cors] origins restricted");
+    CorsLayer::new().allow_origin(origins).allow_methods([Method::GET])
   }
 }
 
-fn busmatick_conf(key: &str) -> provider::busmatick::BusmatickConfig {
-  provider::busmatick::BusmatickConfig { base: std::env::var(key).unwrap_or_default() }
+struct LogTime;
+impl tracing_subscriber::fmt::time::FormatTime for LogTime {
+  fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
+    write!(w, "{}", chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S"))
+  }
 }
 
-fn cors_layer() -> tower_http::cors::CorsLayer {
-  use axum::http::{HeaderValue, Method};
-  use tower_http::cors::CorsLayer;
-
-  if cfg!(debug_assertions) {
-    tracing::warn!("[cors] all origins (debug)");
-    return CorsLayer::permissive();
-  }
-
-  let raw = std::env::var("CORS_ORIGINS").unwrap_or_default();
-  let origins: Vec<HeaderValue> =
-    raw.split(',').map(str::trim).filter(|o| !o.is_empty()).filter_map(|o| o.parse().ok()).collect();
-
-  if origins.is_empty() {
-    panic!("CORS_ORIGINS must be set");
-  }
-
-  tracing::info!(count = origins.len(), "[cors] origins restricted");
-  CorsLayer::new().allow_origin(origins).allow_methods([Method::GET])
-}
-
-#[allow(clippy::unwrap_used)]
 #[tokio::main]
 async fn main() {
   use tower_http::compression::CompressionLayer;
   use tower_http::trace::TraceLayer;
 
-  {
-    use tracing_subscriber::fmt::{format::Writer, time::FormatTime};
-
-    struct Time;
-    impl FormatTime for Time {
-      fn format_time(&self, w: &mut Writer<'_>) -> std::fmt::Result {
-        let now = chrono::Utc::now();
-        write!(w, "{}", now.format("%Y-%m-%dT%H:%M:%S"))
-      }
-    }
-
-    tracing_subscriber::fmt().with_target(false).with_timer(Time).init();
-  }
+  tracing_subscriber::fmt().with_target(false).with_timer(LogTime).init();
 
   let state = State::build().await;
   state.transit.spawn_tasks();
@@ -161,7 +156,7 @@ async fn main() {
   let app = Server::router(state.clone())
     .layer(TraceLayer::new_for_http())
     .layer(CompressionLayer::new())
-    .layer(cors_layer())
+    .layer(Server::cors())
     .with_state(state);
 
   let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();

@@ -1,7 +1,11 @@
-use super::bus::{Bus, BusFreshness, Line};
 use super::*;
+
+mod corridor;
+use super::bus::{Bus, BusFreshness, Line};
 use crate::sdk::arrivals::{UpcomingArrival, UpcomingByLine};
 use crate::sdk::vehicles::BusEntry;
+
+pub(crate) use corridor::forget_shapes;
 
 mod repository;
 
@@ -121,6 +125,26 @@ pub struct StopArrival {
   /// Debug only, unused by the web
   #[serde(default)]
   pub source: ArrivalSource,
+  /// Every estimate (s), to compare sources
+  #[serde(default, skip_serializing_if = "Estimates::is_empty")]
+  pub estimates: Estimates,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct Estimates {
+  pub upcoming_s: Option<f64>,
+  pub corridor_s: Option<f64>,
+  pub schedule_s: Option<f64>,
+  pub fallback_s: Option<f64>,
+  /// Last ETA minus elapsed
+  pub carried_s: Option<f64>,
+}
+
+impl Estimates {
+  fn is_empty(&self) -> bool {
+    [self.upcoming_s, self.corridor_s, self.schedule_s, self.fallback_s, self.carried_s].iter().all(Option::is_none)
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
@@ -131,8 +155,12 @@ pub enum ArrivalSource {
   Schedule,
   /// Provider's arrival API ETA
   Upcoming,
+  /// Position on the shape at the observed pace
+  Corridor,
   /// Bus position on the shape plus scheduled time to the stop
   Projection,
+  /// Position on the shape at commercial speed
+  Fallback,
   /// Lost signal: last ETA minus elapsed time
   Ghost,
   /// No ETA, map only
@@ -153,6 +181,7 @@ pub struct ApproachingBusRow {
   pub line: String,
   pub headsign: Option<String>,
   pub bus_id: String,
+  pub shape_id: Option<String>,
   pub remaining_m: f64,
   pub scheduled_s: Option<f64>,
 }
@@ -211,19 +240,32 @@ impl StopArrival {
     (self.eta.is_none() && self.stop_position.is_none(), self.eta.unwrap_or_default(), !self.live)
   }
 
+  /// STM arrivals overestimate past the first minutes (`tools/benchmark/eta`)
+  const UPCOMING_EXACT_S: i64 = 120;
+  const UPCOMING_FACTOR: f64 = 0.75;
+
+  fn calibrated_upcoming(secs: i64) -> i64 {
+    let tail = (secs - Self::UPCOMING_EXACT_S).max(0) as f64 * Self::UPCOMING_FACTOR;
+    ((secs.min(Self::UPCOMING_EXACT_S) as f64 + tail) / 60.0).round().max(0.0) as i64
+  }
+
   /// Commercial speed without schedule
   const FALLBACK_KMH: f64 = 15.0;
-  const PLAUSIBLE_KMH: std::ops::RangeInclusive<f64> = 3.0..=90.0;
+  const PLAUSIBLE_KMH: std::ops::RangeInclusive<f64> = 3.0..=60.0;
   const DEPARTED_KMH: f64 = 3.0;
 
   /// ETA from scheduled time between bus and stop
-  pub fn from_approaching_bus(bus: &Bus, row: &ApproachingBusRow, had_eta: bool) -> Self {
+  /// Observed pace, else a plausible schedule, else commercial speed
+  pub fn from_approaching_bus(bus: &Bus, row: &ApproachingBusRow, had_eta: bool, observed_s: Option<f64>) -> Self {
     let waiting = !had_eta && bus.seen.speed.unwrap_or(0.0) < Self::DEPARTED_KMH;
-    let eta = (!bus.still && !waiting).then(|| {
-      let scheduled = row.scheduled_s.filter(|&s| Self::PLAUSIBLE_KMH.contains(&(row.remaining_m / s * 3.6)));
-      let secs = scheduled.unwrap_or(row.remaining_m / (Self::FALLBACK_KMH / 3.6));
-      (secs / 60.0).round() as i64
-    });
+    let scheduled = row.scheduled_s.filter(|&s| Self::PLAUSIBLE_KMH.contains(&(row.remaining_m / s * 3.6)));
+    let fallback = row.remaining_m / (Self::FALLBACK_KMH / 3.6);
+    let (secs, source) = match (observed_s, scheduled) {
+      (Some(s), _) => (s, ArrivalSource::Corridor),
+      (None, Some(s)) => (s, ArrivalSource::Projection),
+      (None, None) => (fallback, ArrivalSource::Fallback),
+    };
+    let eta = (!bus.still && !waiting).then(|| (secs / 60.0).round() as i64);
     let eta = eta.filter(|&min| min <= 90);
     let mut snap = bus.clone();
     snap.past_stop = false;
@@ -234,18 +276,25 @@ impl StopArrival {
       zonal: false,
       interpolated: false,
       stop_position: None,
-      source: ArrivalSource::Projection,
+      source,
+      estimates: Estimates {
+        corridor_s: observed_s,
+        schedule_s: row.scheduled_s,
+        fallback_s: Some(fallback),
+        ..Default::default()
+      },
     }
   }
 
   pub fn from_upcoming(u: &UpcomingArrival) -> Self {
     Self {
-      eta: crate::helpers::seconds_to_mins(u.eta_s),
+      eta: u.eta_s.map(Self::calibrated_upcoming),
       live: true,
       zonal: false,
       interpolated: false,
       stop_position: None,
       source: ArrivalSource::Upcoming,
+      estimates: Estimates { upcoming_s: u.eta_s.map(|s| s as f64), ..Default::default() },
       bus: Some(Bus::live(BusEntry { stop: None, next_stop: None, ..u.bus.clone() })),
     }
   }
@@ -275,6 +324,7 @@ impl StopLine {
     state: &crate::Transit,
     scope: &Scope,
     stop_id: &str,
+    stop_at: Option<&crate::sdk::geo::Point>,
     mut lines: StopLines,
     upcoming: UpcomingByLine,
     live: &HashMap<String, Line>,
@@ -289,11 +339,20 @@ impl StopLine {
       for u in &buses {
         let destination =
           u.bus.shape_id.as_ref().and_then(|s| headsigns.get(s)).cloned().or_else(|| u.bus.destination.clone());
+        let mut arrival = StopArrival::from_upcoming(u);
+        // corridor pace wins over the provider API
+        if let (Some(stop), Some(shape)) = (stop_at, u.bus.shape_id.as_deref()) {
+          arrival.estimates.corridor_s = corridor::eta_secs(state, scope, shape, &u.bus.location, stop).await;
+          if let Some(secs) = arrival.estimates.corridor_s {
+            arrival.eta = Some((secs / 60.0).round() as i64);
+            arrival.source = ArrivalSource::Corridor;
+          }
+        }
         by_service
           .entry(ServiceKey::new(&line_id, destination.as_deref()))
           .or_insert_with(|| (line_id.clone(), destination, vec![]))
           .2
-          .push(StopArrival::from_upcoming(u));
+          .push(arrival);
       }
     }
     for (key, (line_id, destination, mut arrivals)) in by_service {
@@ -328,7 +387,7 @@ impl StopLine {
         let bus_meta: HashMap<String, &Bus> = all_buses.iter().map(|b| (b.seen.id.clone(), b)).collect();
 
         if let Ok(rows) = StopArrival::query_approaching(&state.db, scope, stop_id, &all_buses).await {
-          use crate::cache::{BusTracking, bus_key};
+          use crate::cache::BusTracker;
           let ghosts = state.cache.tracker().stop_ghosts(scope.region.id(), stop_id).await;
           let mut computed: HashMap<ServiceKey, (String, Option<String>, Vec<StopArrival>)> = HashMap::new();
           for row in rows {
@@ -336,8 +395,12 @@ impl StopLine {
               continue;
             };
             let destination = row.headsign.clone().or_else(|| bus.seen.destination.clone());
-            let arrival =
-              StopArrival::from_approaching_bus(bus, &row, ghosts.contains_key(&bus_key(scope.provider, &row.bus_id)));
+            let observed = match (stop_at, row.shape_id.as_deref()) {
+              (Some(stop), Some(shape)) => corridor::eta_secs(state, scope, shape, &bus.seen.location, stop).await,
+              _ => None,
+            };
+            let had_eta = ghosts.contains_key(&BusTracker::key(scope.provider, &row.bus_id));
+            let arrival = StopArrival::from_approaching_bus(bus, &row, had_eta, observed);
             computed
               .entry(ServiceKey::new(&row.line, destination.as_deref()))
               .or_insert_with(|| (row.line.clone(), destination, vec![]))
@@ -384,10 +447,11 @@ impl StopLine {
     state: &crate::Transit,
     scope: &Scope,
     stop_id: &str,
+    stop_at: Option<&crate::sdk::geo::Point>,
     lines: &mut StopLines,
     positions: &HashMap<String, Line>,
   ) {
-    use crate::cache::{BusTracking, StopGhost, bus_key, split_bus_key};
+    use crate::cache::{BusTracker, StopGhost};
     let tracker = state.cache.tracker();
     let (region, provider) = (scope.region.id(), scope.provider);
     let mut ghost_map = tracker.stop_ghosts(region, stop_id).await;
@@ -396,14 +460,14 @@ impl StopLine {
       .values()
       .flat_map(|l| l.buses.iter())
       .filter(|b| b.freshness == BusFreshness::Live)
-      .map(|b| bus_key(provider, &b.seen.id))
+      .map(|b| BusTracker::key(provider, &b.seen.id))
       .collect();
 
     let current_rt_bus_ids: HashSet<String> = lines
       .values()
       .flat_map(|l| &l.arrivals)
       .filter(|a| a.live)
-      .filter_map(|a| a.bus.as_ref().map(|b| bus_key(provider, &b.seen.id)))
+      .filter_map(|a| a.bus.as_ref().map(|b| BusTracker::key(provider, &b.seen.id)))
       .collect();
 
     for line_data in lines.values() {
@@ -415,7 +479,7 @@ impl StopLine {
           continue;
         };
         tracker.mark_seen(provider, &bus.seen.id).await;
-        let key = bus_key(provider, &bus.seen.id);
+        let key = BusTracker::key(provider, &bus.seen.id);
         let ghost = StopGhost {
           arrival: arrival.clone(),
           line: line_data.line.clone(),
@@ -436,7 +500,7 @@ impl StopLine {
         continue;
       }
 
-      let Some((prov, raw)) = split_bus_key(&id) else {
+      let Some((prov, raw)) = BusTracker::split_key(&id) else {
         continue;
       };
 
@@ -447,9 +511,19 @@ impl StopLine {
 
       let Some(entry) = ghost_map.get(&id) else { continue };
 
-      let now_epoch = chrono::Utc::now().timestamp();
-      let elapsed_min = (now_epoch - last_seen_epoch).max(0) / 60;
-      let adjusted_eta = entry.arrival.eta.map(|m| m - elapsed_min);
+      // from the last sighting at corridor pace, minus elapsed
+      let elapsed_s = (chrono::Utc::now().timestamp() - last_seen_epoch).max(0) as f64;
+      let reprojected = match (stop_at, entry.arrival.bus.as_ref()) {
+        (Some(stop), Some(bus)) => match bus.seen.shape_id.as_deref() {
+          Some(shape) => corridor::eta_secs(state, scope, shape, &bus.seen.location, stop).await,
+          None => None,
+        },
+        _ => None,
+      };
+      let adjusted_eta = match reprojected {
+        Some(secs) => Some(((secs - elapsed_s) / 60.0).round() as i64),
+        None => entry.arrival.eta.map(|m| m - elapsed_s as i64 / 60),
+      };
 
       if adjusted_eta.is_some_and(|m| m < 0) {
         tracker.remove_stop_ghost(region, stop_id, &id).await;
@@ -460,6 +534,11 @@ impl StopLine {
       let mut ghost_arrival = entry.arrival.clone();
       ghost_arrival.eta = adjusted_eta;
       ghost_arrival.source = ArrivalSource::Ghost;
+      ghost_arrival.estimates = Estimates {
+        corridor_s: reprojected.map(|s| (s - elapsed_s).max(0.0)),
+        carried_s: entry.arrival.eta.map(|m| (m as f64 * 60.0 - elapsed_s).max(0.0)),
+        ..Default::default()
+      };
       if let Some(snap) = ghost_arrival.bus.as_mut() {
         snap.freshness = freshness;
       }
@@ -565,6 +644,7 @@ impl StopLine {
         interpolated: false,
         stop_position: None,
         source: ArrivalSource::Position,
+        estimates: Estimates::default(),
       });
     }
   }
@@ -612,6 +692,7 @@ impl StopLine {
         interpolated: false,
         stop_position: None,
         source: ArrivalSource::Position,
+        estimates: Estimates::default(),
       });
     }
   }
@@ -624,8 +705,6 @@ use crate::sdk::vehicles::Vehicles;
 impl StopLine {
   /// Same-authority buses placed here by their operator, name checked against code
   async fn attach_relayed(state: &crate::Transit, scope: &Scope, stop_id: &str, lines: &mut StopLines) {
-    use crate::cache::BusTracking;
-
     let others: Vec<Scope> = state
       .scopes()
       .filter(|s| s.region == scope.region && s.provider != scope.provider)
@@ -666,6 +745,7 @@ impl StopLine {
           interpolated: false,
           stop_position: Some(position),
           source: ArrivalSource::Relayed,
+          estimates: Estimates::default(),
         };
         Self::slot(lines, &bus.seen.line, bus.seen.destination.as_deref()).arrivals.push(arrival);
       }
@@ -693,25 +773,27 @@ impl StopDetail {
     };
     let (mut upcoming_lines, live_lines, stop) =
       tokio::join!(upcoming, Line::fetch(state, scope, &line_ids), Stop::load(state, scope, stop_id));
-    if let Ok(stop) = stop {
-      let at = crate::sdk::geo::Point { lat: stop.lat, lng: stop.lng };
-      Line::observe_upcoming(state, scope, &at, &mut upcoming_lines).await;
+    let at = stop.ok().map(|s| crate::sdk::geo::Point { lat: s.lat, lng: s.lng });
+    if let Some(at) = &at {
+      Line::observe_upcoming(state, scope, at, &mut upcoming_lines).await;
     }
 
     // merge
-    Ok(Self::build(state, scope, stop_id, static_lines, upcoming_lines, live_lines.unwrap_or_default()).await)
+    Ok(Self::build(state, scope, stop_id, at, static_lines, upcoming_lines, live_lines.unwrap_or_default()).await)
   }
 
   pub async fn build(
     state: &crate::Transit,
     scope: &Scope,
     stop_id: &str,
+    stop_at: Option<crate::sdk::geo::Point>,
     static_lines: StopLines,
     upcoming: UpcomingByLine,
     positions: Lines,
   ) -> Self {
-    let mut lines = StopLine::fuse(state, scope, stop_id, static_lines, upcoming, &positions).await;
-    StopLine::apply_ghosts(state, scope, stop_id, &mut lines, &positions).await;
+    let at = stop_at.as_ref();
+    let mut lines = StopLine::fuse(state, scope, stop_id, at, static_lines, upcoming, &positions).await;
+    StopLine::apply_ghosts(state, scope, stop_id, at, &mut lines, &positions).await;
     StopLine::attach_past_stop_buses(state, scope, stop_id, &mut lines, &positions).await;
     StopLine::attach_shapeless(state, scope, &mut lines, &positions).await;
     StopLine::attach_relayed(state, scope, stop_id, &mut lines).await;

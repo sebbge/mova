@@ -43,10 +43,13 @@ impl Route {
   }
 
   pub async fn load_list(state: &crate::Transit) -> crate::Result<Vec<Self>> {
-    use crate::cache::CacheRw;
     let cache = &state.cache;
     cache
-      .get_or_load(&crate::cache::key(crate::cache::SHARED, "routes:all"), cache.until_sync(), Self::list(&state.db))
+      .get_or_load(
+        &crate::cache::Cache::key(crate::cache::Cache::SHARED, "routes:all"),
+        cache.until_sync(),
+        Self::list(&state.db),
+      )
       .await
   }
 }
@@ -197,7 +200,7 @@ impl RouteShape {
       .await?;
 
     Ok(RouteShape {
-      route_id: crate::scope::qualify(scope.provider, &r.route_id),
+      route_id: crate::scope::Scope::qualify(scope.provider, &r.route_id),
       shape_id: r.shape_id,
       direction_id: r.direction_id,
       headsign: r.headsign,
@@ -349,10 +352,9 @@ impl RouteSchedule {
 }
 
 //- cache
-use crate::cache::CacheRw;
 impl Route {
   fn search_key(q: &str) -> String {
-    crate::cache::key(crate::cache::SHARED, &format!("routes:search:{}", q.to_lowercase()))
+    crate::cache::Cache::key(crate::cache::Cache::SHARED, &format!("routes:search:{}", q.to_lowercase()))
   }
 
   pub async fn load_search(state: &crate::Transit, q: &str) -> crate::Result<Vec<Self>> {
@@ -363,7 +365,7 @@ impl Route {
 
 impl RouteShape {
   fn shape_key(scope: &Scope, line: &str, direction: i16) -> String {
-    crate::cache::key(scope.region.id(), &format!("routes:shape:{}:{line}:{direction}", scope.provider))
+    crate::cache::Cache::key(scope.region.id(), &format!("routes:shape:{}:{line}:{direction}", scope.provider))
   }
 
   pub async fn load(state: &crate::Transit, scope: &Scope, route_id: &str, direction: i16) -> crate::Result<Self> {
@@ -374,7 +376,7 @@ impl RouteShape {
 
   pub async fn load_by_shape(state: &crate::Transit, scope: &Scope, shape_id: &str) -> crate::Result<Self> {
     let cache = &state.cache;
-    let key = crate::cache::key(scope.region.id(), &format!("routes:shape_id:{}:{shape_id}", scope.provider));
+    let key = crate::cache::Cache::key(scope.region.id(), &format!("routes:shape_id:{}:{shape_id}", scope.provider));
     cache.get_or_load(&key, cache.until_sync(), Self::get_by_shape(&state.db, scope, shape_id)).await
   }
 }
@@ -399,7 +401,7 @@ impl RouteTimes {
     let variant = shape.shape_id.as_deref().or(shape.headsign.as_deref()).unwrap_or("");
     let rest =
       format!("routes:times:{}:{route_id}:{}:{variant}:{}", scope.provider, shape.direction_id, stop.unwrap_or(""));
-    let key = crate::cache::key(scope.region.id(), &rest);
+    let key = crate::cache::Cache::key(scope.region.id(), &rest);
     state.cache.get_or_load(&key, Self::TTL, Self::get(&state.db, scope, &shape, stop)).await
   }
 }
@@ -421,8 +423,8 @@ impl RouteSchedule {
 
     let cache = &state.cache;
     let rest = format!("routes:schedule:{}:{route_id}:{direction}:{stop}:{date}", scope.provider);
-    let key = crate::cache::key(scope.region.id(), &rest);
-    let ttl = crate::helpers::secs_to_midnight().min(cache.until_sync());
+    let key = crate::cache::Cache::key(scope.region.id(), &rest);
+    let ttl = crate::cache::Cache::until_midnight().min(cache.until_sync());
     let mut schedule =
       cache.get_or_load(&key, ttl, Self::get(&state.db, scope, route_id, direction, stop, day, date)).await?;
 

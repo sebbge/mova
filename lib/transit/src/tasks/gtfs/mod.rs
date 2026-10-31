@@ -95,7 +95,6 @@ async fn run_once(state: &crate::Transit) {
 
     match check_and_sync(state, &handle).await {
       Ok(SyncStatus::Synced(version)) => {
-        use crate::cache::Flush;
         state.cache.flush_region(handle.authority).await;
         state.gtfs_versions.write().await.insert(provider.clone(), version);
         synced = true;

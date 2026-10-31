@@ -3,8 +3,8 @@
 Captura lo mismo que ve la web (llegadas y posiciones) y, al terminar, cruza cada ETA
 anunciado con el momento en que ese bus pasó de verdad por la parada.
 
-    python benchmark/eta/monitor.py --stop stm/3663 --minutes 30
-    python benchmark/eta/monitor.py --analyze benchmark/eta/runs/<corrida>
+    python tools/benchmark/eta/monitor.py --stop stm/3663 --minutes 30
+    python tools/benchmark/eta/monitor.py --analyze tools/benchmark/eta/runs/<corrida>
 """
 
 import argparse
@@ -73,6 +73,7 @@ def capture(api: str, stop: str, minutes: float, every: float) -> Path:
                         write({"kind": "arrival", "poll": poll, "generated": detail.get("generated_at"),
                                "line": line["line"], "destination": line.get("destination"),
                                "eta": a.get("eta"), "live": a["live"], "source": a.get("source"),
+                               "estimates": a.get("estimates"),
                                "stop_position": a.get("stop_position"), "bus": bus.get("id"),
                                "bus_ts": bus.get("timestamp"), "location": bus.get("location"),
                                "freshness": bus.get("freshness"), "delay": bus.get("delay_min"),
@@ -143,10 +144,48 @@ def table(title: str, groups: dict[str, list[float]], minimum: int = 3) -> str:
     return "\n".join(rows) + "\n"
 
 
-def analyze(run: Path) -> str:
+def fit(pairs: dict[str, list[tuple[float, float]]]) -> str:
+    """Por vía, la recta que mejor lleva del ETA anunciado al tiempo real, y el error que dejaría."""
+    rows = ["### Ajuste lineal por vía", "", "Tiempo real hasta la llegada ≈ factor × ETA anunciado + corrimiento.", "",
+            "| vía | n | factor | corrimiento | mediana abs hoy | mediana abs ajustado |", "|---|---|---|---|---|---|"]
+    for source, xy in sorted(pairs.items(), key=lambda p: -len(p[1])):
+        if len(xy) < 8:
+            continue
+        mx, my = statistics.fmean(x for x, _ in xy), statistics.fmean(y for _, y in xy)
+        sxx = sum((x - mx) ** 2 for x, _ in xy) or 1
+        slope = sum((x - mx) * (y - my) for x, y in xy) / sxx
+        intercept = my - slope * mx
+        today = statistics.median(abs(y - x) for x, y in xy)
+        fitted = statistics.median(abs(y - (slope * x + intercept)) for x, y in xy)
+        rows.append(f"| {source} | {len(xy)} | {slope:.2f} | {intercept:+.0f} s | {today:.0f} s | {fitted:.0f} s |")
+    return "\n".join(rows) + "\n"
+
+
+def compare(rows: list[dict[str, float]]) -> str:
+    """Las estimaciones del backend, cada una sola y de a pares sobre las mismas llegadas."""
+    if not rows:
+        return ""
+    keys = sorted({k for r in rows for k in r})
+    out = [table("Cada estimación, sin redondear", {k: [r[k] for r in rows if k in r] for k in keys}),
+           "### Pares sobre las mismas llegadas", "",
+           "| par | n | mediana abs A | mediana abs B | sesgo A | sesgo B |", "|---|---|---|---|---|---|"]
+    for i, a in enumerate(keys):
+        for b in keys[i + 1:]:
+            both = [(r[a], r[b]) for r in rows if a in r and b in r]
+            if len(both) < 5:
+                continue
+            ea, eb = [x for x, _ in both], [y for _, y in both]
+            out.append(f"| {a} · {b} | {len(both)} | {statistics.median(map(abs, ea)):.0f} s "
+                       f"| {statistics.median(map(abs, eb)):.0f} s | {statistics.fmean(ea):+.0f} s "
+                       f"| {statistics.fmean(eb):+.0f} s |")
+    return "\n".join(out) + "\n"
+
+
+def analyze(run: Path, warmup: float = 0) -> str:
     meta = json.loads((run / "meta.json").read_text(encoding="utf-8"))
     rows = [json.loads(line) for line in (run / "snapshots.jsonl").open(encoding="utf-8")]
     end = parse_ts(meta.get("ended")) or max(parse_ts(r["poll"]) for r in rows)
+    start = parse_ts(meta["started"])
     lat0, lng0 = meta["lat"], meta["lng"]
     kx, ky = 111_320 * math.cos(math.radians(lat0)), 110_540
 
@@ -169,6 +208,9 @@ def analyze(run: Path) -> str:
 
     by_source, by_horizon, by_line, by_freshness, by_source_horizon = (defaultdict(list) for _ in range(5))
     worst, unverified, seen = [], 0, set()
+    pairs: dict[str, list[tuple[float, float]]] = defaultdict(list)
+    # Cada estimación del backend contra la misma llegada real, se haya mostrado o no.
+    counterfactual: list[dict[str, float]] = []
     for r in rows:
         if r["kind"] != "arrival" or not r["live"] or r.get("eta") is None or not r.get("bus"):
             continue
@@ -178,6 +220,9 @@ def analyze(run: Path) -> str:
         if key in seen:
             continue
         seen.add(key)
+        # El pool arranca vacío con el server: lo que se anunció antes de tener historia no cuenta.
+        if made < start + warmup * 60:
+            continue
         announced = made + r["eta"] * 60
         if announced > end - TAIL_S:
             continue
@@ -194,6 +239,10 @@ def analyze(run: Path) -> str:
         by_line[r["line"]].append(error)
         by_freshness[r.get("freshness") or "?"].append(error)
         worst.append((abs(error), error, r["line"], source, r["eta"], r["bus"]))
+        pairs[source].append((r["eta"] * 60, actual - made))
+        estimated = {k: actual - (made + v) for k, v in (r.get("estimates") or {}).items() if v is not None}
+        if estimated:
+            counterfactual.append(estimated | {"mostrado": error})
 
     every_error = [e for errors in by_source.values() for e in errors]
     lines = [
@@ -208,6 +257,7 @@ def analyze(run: Path) -> str:
         lines += [table("Total", {"todas": every_error}, 1), table("Por vía", by_source),
                   table("Por horizonte", by_horizon), table("Por vía y horizonte", by_source_horizon),
                   table("Por frescura de la posición", by_freshness), table("Por línea", by_line, 5)]
+        lines += [fit(pairs), compare(counterfactual)]
         lines += ["### Peores casos", "", "| error | línea | vía | ETA anunciado | bus |", "|---|---|---|---|---|"]
         for _, error, line, source, eta, bus in sorted(worst, reverse=True)[:12]:
             lines.append(f"| {error:+.0f} s | {line} | {source} | {eta}' | {bus} |")
@@ -223,6 +273,8 @@ if __name__ == "__main__":
     parser.add_argument("--stop", default="stm/3663", help="proveedor/id")
     parser.add_argument("--minutes", type=float, default=30)
     parser.add_argument("--every", type=float, default=10, help="segundos entre lecturas")
+    parser.add_argument("--warmup", type=float, default=0, help="minutos iniciales que no se evalúan")
     parser.add_argument("--analyze", type=Path, help="solo analizar una corrida ya capturada")
     args = parser.parse_args()
-    print(analyze(args.analyze or capture(args.api, args.stop, args.minutes, args.every)))
+    run = args.analyze or capture(args.api, args.stop, args.minutes, args.every)
+    print(analyze(run, args.warmup))

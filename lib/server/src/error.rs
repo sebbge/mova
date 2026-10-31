@@ -17,11 +17,11 @@ impl IntoResponse for Error {
     let (status, body) = match self {
       Self::Transit(Transit::Config(msg)) => {
         tracing::error!(error = %msg, "[api] config error");
-        (StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!({ "error": "internal server error" }))
+        Self::internal()
       }
       Self::Transit(Transit::Database(e)) => {
         tracing::error!(error = %e, "[api] database error");
-        (StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!({ "error": "internal server error" }))
+        Self::internal()
       }
       Self::Transit(Transit::External(msg)) => {
         tracing::error!(error = %msg, "[api] external source error");
@@ -37,12 +37,18 @@ impl IntoResponse for Error {
       }
       Self::Planner(Planner::Internal(msg)) => {
         tracing::error!(error = %msg, "[api] planner error");
-        (StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!({ "error": "internal server error" }))
+        Self::internal()
       }
       Self::BadRequest(msg) => (StatusCode::BAD_REQUEST, serde_json::json!({ "error": msg })),
     };
 
     (status, Json(body)).into_response()
+  }
+}
+
+impl Error {
+  fn internal() -> (StatusCode, serde_json::Value) {
+    (StatusCode::INTERNAL_SERVER_ERROR, serde_json::json!({ "error": "internal server error" }))
   }
 }
 

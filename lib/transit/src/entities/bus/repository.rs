@@ -1,13 +1,12 @@
 use super::{Bus, Headsigns, Line, Positions};
 
 //- cache
-use crate::cache::CacheRw;
 impl Line {
   const TTL: u64 = 10;
 
   /// Per provider and region
   fn buses_key(region: &str, provider: &str, line_id: &str) -> String {
-    crate::cache::key(region, &format!("rt:{provider}:buses:{line_id}"))
+    crate::cache::Cache::key(region, &format!("rt:{provider}:buses:{line_id}"))
   }
 
   pub(crate) async fn cache_get(cache: &crate::Cache, region: &str, provider: &str, line_id: &str) -> Option<Self> {
@@ -23,7 +22,7 @@ impl Line {
 
   //
   fn headsign_key(region: &str, provider: &str, route_short_name: &str) -> String {
-    crate::cache::key(region, &format!("headsigns:{provider}:{route_short_name}"))
+    crate::cache::Cache::key(region, &format!("headsigns:{provider}:{route_short_name}"))
   }
 
   pub(crate) async fn get_headsigns_cache(

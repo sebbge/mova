@@ -3,6 +3,7 @@ import {defineConfig, envField} from 'astro/config';
 
 export default defineConfig({
   output: 'static',
+  outDir: '../../.artifact/web',
   trailingSlash: 'never',
   build: {format: 'file'},
   server: {port: 5173},

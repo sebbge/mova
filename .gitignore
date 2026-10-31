@@ -2,10 +2,11 @@
 node_modules
 .project
 dist
+build
 .env
 
-# map tiles
-client/web/public/tiles/*.pmtiles
-
 __pycache__
+
+# map tiles
+*.pmtiles
 gtfs_example.zip

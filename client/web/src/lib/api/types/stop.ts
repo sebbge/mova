@@ -12,7 +12,7 @@ export interface StopArrival {
   zonal?: boolean; // zone marker
   interpolated?: boolean; // estimated between two points
   stop_position?: StopPosition;
-  source?: 'schedule' | 'upcoming' | 'projection' | 'ghost' | 'position' | 'relayed';
+  source?: 'schedule' | 'upcoming' | 'corridor' | 'projection' | 'fallback' | 'ghost' | 'position' | 'relayed';
   eta?: number;
   live: boolean;
   bus?: Bus;

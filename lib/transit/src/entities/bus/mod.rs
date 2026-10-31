@@ -139,8 +139,6 @@ impl Line {
   const FLEET_WAIT: Duration = Duration::from_secs(15);
 
   pub async fn fetch(state: &crate::Transit, scope: &Scope, line_ids: &[String]) -> crate::Result<Lines> {
-    use crate::cache::BusTracking;
-
     let tracker = state.cache.tracker();
     if let Some(Vehicles::Fleet(_)) = scope.vehicles() {
       tracker.touch(scope.provider);
@@ -204,7 +202,6 @@ impl Line {
 
   /// Arrival API buses into the pool, known ones only when closer to the stop
   pub async fn observe_upcoming(state: &crate::Transit, scope: &Scope, stop: &Point, upcoming: &mut UpcomingByLine) {
-    use crate::cache::BusTracking;
     let tracker = state.cache.tracker();
     let now = chrono::Utc::now();
     for u in upcoming.values_mut().flatten() {
@@ -215,7 +212,10 @@ impl Line {
           .as_ref()
           .is_none_or(|k| stop.distance_to(&u.bus.location) < stop.distance_to(&k.seen.location) - Self::AHEAD_M);
       let latest = if ahead {
-        tracker.observe(scope.provider, BusEntry { timestamp: u.bus.timestamp.or(Some(now)), ..u.bus.clone() }).await
+        match u.bus.timestamp {
+          Some(_) => tracker.observe(scope.provider, u.bus.clone()).await,
+          None => tracker.observe_unstamped(scope.provider, BusEntry { timestamp: Some(now), ..u.bus.clone() }).await,
+        }
       } else if let Some(k) = known {
         k
       } else {
@@ -238,7 +238,6 @@ impl Line {
     for scope in scopes.into_iter().filter(|s| matches!(s.vehicles(), Some(Vehicles::Fleet(_)))) {
       let state = state.clone();
       views.spawn(async move {
-        use crate::cache::BusTracking;
         let tracker = state.cache.tracker();
         tracker.touch(scope.provider);
         let view = tracker.wait_view(scope.provider, Self::FLEET_STALE, Self::FLEET_WAIT).await;
@@ -260,8 +259,6 @@ impl Line {
   }
 
   pub async fn observe_fleet(state: &crate::Transit, scope: &Scope, fleet: Vec<BusEntry>) {
-    use crate::cache::BusTracking;
-
     let tracker = state.cache.tracker();
     let provider = scope.provider;
     if tracker.view(provider, Self::FLEET_STALE).await.is_none() {
@@ -289,8 +286,6 @@ impl Line {
   }
 
   async fn build(state: &crate::Transit, scope: &Scope, line: &str, observations: Vec<BusEntry>) -> Self {
-    use crate::cache::BusTracking;
-
     let tracker = state.cache.tracker();
     let provider = scope.provider;
 
@@ -380,7 +375,6 @@ impl Line {
     let bearing_map: HashMap<&str, f64> =
       rows.iter().filter_map(|r| r.bearing_deg.map(|b| (r.bus_id.as_str(), b))).collect();
 
-    use crate::cache::BusTracking;
     for &i in &missing {
       let p = &mut positions[i];
       if let Some(&deg) = bearing_map.get(p.seen.id.as_str()) {

@@ -1,9 +1,10 @@
 use super::super::bus::Bus;
+use super::corridor::Polyline;
 use super::{
   ApproachingBusRow, PastStopBusRow, ScheduleProfile, ScheduledLine, ServiceKey, Stop, StopArrival, StopDetail,
   StopHit, StopItem, StopLine, StopLines, StopRoute, StopSchedule,
 };
-use crate::helpers::Encoding;
+use crate::cache::Encoding;
 use crate::scope::Scope;
 
 use std::collections::HashMap;
@@ -125,6 +126,7 @@ impl StopLine {
         interpolated: row.interpolated,
         stop_position: None,
         source: super::ArrivalSource::Schedule,
+        estimates: Default::default(),
       });
     }
 
@@ -313,7 +315,7 @@ impl StopSchedule {
       })
       .collect();
 
-    lines.sort_by(|a, b| crate::helpers::cmp_line(&a.line, &b.line));
+    lines.sort_by(ScheduledLine::by_line);
 
     Ok(Self { service_date: now.format("%Y-%m-%d").to_string(), lines })
   }
@@ -426,7 +428,7 @@ impl Stop {
     let siblings: Vec<String> = group.into_iter().map(|s| s.reference).collect();
 
     Ok(Self {
-      stop_id: crate::scope::qualify(scope.provider, &row.stop_id),
+      stop_id: crate::scope::Scope::qualify(scope.provider, &row.stop_id),
       stop_name,
       station,
       platform,
@@ -668,7 +670,7 @@ impl Stop {
 //- cache
 impl Stop {
   fn stop_key(scope: &Scope, stop_id: &str) -> String {
-    crate::cache::key(scope.region.id(), &format!("stop:{}:{stop_id}", scope.provider))
+    crate::cache::Cache::key(scope.region.id(), &format!("stop:{}:{stop_id}", scope.provider))
   }
 
   pub async fn load(state: &crate::Transit, scope: &Scope, stop_id: &str) -> crate::Result<Self> {
@@ -677,11 +679,10 @@ impl Stop {
   }
 
   fn list_key(area: &str, enc: Encoding) -> String {
-    crate::cache::key(area, &format!("stops:area{}", enc.suffix()))
+    crate::cache::Cache::key(area, &format!("stops:area{}", enc.suffix()))
   }
 
   pub async fn load_list(transit: &crate::Transit, area: &str, enc: Encoding) -> crate::Result<Vec<u8>> {
-    use crate::cache::CacheBytes;
     if let Some(bytes) = transit.cache.get_bytes(&Self::list_key(area, enc)).await {
       return Ok(bytes);
     }
@@ -698,17 +699,12 @@ impl Stop {
     cache: &crate::Cache,
     area: &str,
   ) -> crate::Result<Vec<(Encoding, Vec<u8>)>> {
-    use crate::cache::CacheBytes;
-
     let stops = Self::list(db, area).await?;
     let json =
       serde_json::to_vec(&stops).map_err(|e| crate::Error::External(format!("couldn't serialize stop list: {e}")))?;
 
     let variants = tokio::task::spawn_blocking(move || {
-      Encoding::ALL
-        .iter()
-        .map(|&enc| crate::helpers::compress(&json, enc).map(|b| (enc, b)))
-        .collect::<Result<Vec<_>, _>>()
+      Encoding::ALL.iter().map(|&enc| enc.compress(&json).map(|b| (enc, b))).collect::<Result<Vec<_>, _>>()
     })
     .await
     .map_err(|e| crate::Error::External(format!("stop list compression panicked: {e}")))?
@@ -732,18 +728,17 @@ impl Stop {
 }
 
 // cache
-use crate::cache::CacheRw;
 
 impl StopSchedule {
   fn schedule_key(scope: &Scope, stop_id: &str, date: &str) -> String {
-    crate::cache::key(scope.region.id(), &format!("schedule:{}:{stop_id}:{date}", scope.provider))
+    crate::cache::Cache::key(scope.region.id(), &format!("schedule:{}:{stop_id}:{date}", scope.provider))
   }
 
   /// Expires at midnight
   pub async fn load(state: &crate::Transit, scope: &Scope, stop_id: &str) -> crate::Result<Self> {
     let cache = &state.cache;
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
-    let ttl = crate::helpers::secs_to_midnight().min(cache.until_sync());
+    let ttl = crate::cache::Cache::until_midnight().min(cache.until_sync());
     cache.get_or_load(&Self::schedule_key(scope, stop_id, &today), ttl, Self::get(&state.db, scope, stop_id)).await
   }
 }
@@ -751,7 +746,7 @@ impl StopDetail {
   const TTL: u64 = 10;
 
   fn stop_detail_key(scope: &Scope, stop_id: &str) -> String {
-    crate::cache::key(scope.region.id(), &format!("stop_detail:{}:{stop_id}", scope.provider))
+    crate::cache::Cache::key(scope.region.id(), &format!("stop_detail:{}:{stop_id}", scope.provider))
   }
 
   pub async fn load(state: &crate::Transit, scope: &Scope, stop_id: &str) -> crate::Result<Self> {
@@ -874,6 +869,7 @@ impl StopArrival {
       line: String,
       headsign: Option<String>,
       bus_id: Option<String>,
+      shape_id: Option<String>,
       remaining_m: Option<f64>,
       bus_frac: f64,
       stop_frac: f64,
@@ -902,7 +898,7 @@ impl StopArrival {
                   ST_SetSRID(ST_MakePoint(b.bus_lng, b.bus_lat), 4326)::geography),
               UPPER(TRIM(ls.headsign)) IS NOT DISTINCT FROM UPPER(TRIM(b.bus_dest)) DESC
       )
-      SELECT c.line, c.headsign, c.bus_id, c.bus_frac, c.stop_frac,
+      SELECT c.line, c.headsign, c.bus_id, c.shape_id, c.bus_frac, c.stop_frac,
              ST_Length(ST_LineSubstring(c.shape, c.bus_frac, c.stop_frac)::geography) AS remaining_m,
              n.fracs, n.secs
       FROM nearby c
@@ -965,6 +961,7 @@ impl StopArrival {
             line: r.line,
             headsign: r.headsign,
             bus_id: r.bus_id.unwrap_or_default(),
+            shape_id: r.shape_id,
             remaining_m,
             scheduled_s,
           })
@@ -1058,5 +1055,56 @@ impl StopArrival {
         })
         .collect(),
     )
+  }
+}
+
+impl ScheduledLine {
+  /// Natural order, must match the `Stop::get` ORDER BY
+  fn by_line(a: &Self, b: &Self) -> std::cmp::Ordering {
+    let (a, b) = (a.line.as_str(), b.line.as_str());
+    fn digits(s: &str) -> Option<u64> {
+      let n: String = s.chars().filter(char::is_ascii_digit).collect();
+      n.parse().ok()
+    }
+    match (digits(a), digits(b)) {
+      (Some(x), Some(y)) => x.cmp(&y).then_with(|| a.cmp(b)),
+      (Some(_), None) => std::cmp::Ordering::Less,
+      (None, Some(_)) => std::cmp::Ordering::Greater,
+      (None, None) => a.cmp(b),
+    }
+  }
+}
+
+impl Polyline {
+  pub(super) async fn query_geojson(db: &crate::Db, scope: &Scope, shape_id: &str) -> Option<String> {
+    let q = "SELECT ST_AsGeoJSON(geom) FROM shapes WHERE region = $1 AND provider = $2 AND shape_id = $3";
+    sqlx::query_scalar(q)
+      .bind(scope.region.id())
+      .bind(scope.provider)
+      .bind(shape_id)
+      .fetch_optional(db)
+      .await
+      .ok()
+      .flatten()
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::ScheduledLine;
+
+  #[test]
+  fn sorts_lines_naturally() {
+    let line = |l: &str| ScheduledLine {
+      line: l.into(),
+      destination: None,
+      departures: Vec::new(),
+      zonal: false,
+      interpolated: false,
+    };
+    let mut lines: Vec<ScheduledLine> = ["100", "2", "L1", "17", "124 SD", "BT1", "G"].map(line).into();
+    lines.sort_by(ScheduledLine::by_line);
+    let names: Vec<&str> = lines.iter().map(|l| l.line.as_str()).collect();
+    assert_eq!(names, ["BT1", "L1", "2", "17", "100", "124 SD", "G"]);
   }
 }

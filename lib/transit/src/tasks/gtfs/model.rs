@@ -60,6 +60,7 @@ impl LocalGtfs {
     }
 
     Self::end(tx, gtfs, new_version, provider).await?;
+    crate::entities::stop::forget_shapes(region, provider);
 
     Ok(())
   }

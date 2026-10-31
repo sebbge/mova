@@ -11,28 +11,19 @@ pub async fn list(State(state): State<crate::State>) -> crate::Res<Vec<Route>> {
 }
 
 ///# GET <MOVA>/routes/search?q=<term>
-pub async fn search(State(state): State<crate::State>, Query(params): Query<SearchQuery>) -> crate::Res<Vec<Route>> {
-  if params.q.is_empty() {
-    return Err(crate::Error::BadRequest("q must not be empty".into()));
-  }
-
-  let routes = Route::load_search(&state.transit, &params.q).await?;
-  tracing::info!(term = params.q, "GET 200 /routes/search");
+pub async fn search(State(state): State<crate::State>, Query(query): Query<SearchQuery>) -> crate::Res<Vec<Route>> {
+  let term = query.term()?;
+  let routes = Route::load_search(&state.transit, term).await?;
+  tracing::info!(term, "GET 200 /routes/search");
   Ok(Json(routes))
-}
-
-#[derive(Debug, serde::Deserialize)]
-pub struct SearchQuery {
-  pub q: String,
 }
 
 ///# GET <MOVA>/route/shape/:provider/:id?direction_id=0
 pub async fn shape(
   State(state): State<crate::State>,
-  Path((provider, route_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: route_id }: Scoped,
   Query(params): Query<ShapeQuery>,
 ) -> crate::Res<RouteShape> {
-  let scope = state.transit.resolve(&provider)?;
   let direction = params.direction_id.unwrap_or(0);
 
   let shape = RouteShape::load(&state.transit, &scope, &route_id, direction).await?;
@@ -43,9 +34,8 @@ pub async fn shape(
 ///# GET <MOVA>/shape/:provider/:id
 pub async fn variant(
   State(state): State<crate::State>,
-  Path((provider, shape_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: shape_id }: Scoped,
 ) -> crate::Res<RouteShape> {
-  let scope = state.transit.resolve(&provider)?;
   let shape = RouteShape::load_by_shape(&state.transit, &scope, &shape_id).await?;
   tracing::info!(provider, shape_id, "GET 200 /shape/:provider/:id");
   Ok(Json(shape))
@@ -54,10 +44,9 @@ pub async fn variant(
 ///# GET <MOVA>/route/times/:provider/:id?direction_id=0&shape_id=<id>&stop=<id>
 pub async fn times(
   State(state): State<crate::State>,
-  Path((provider, route_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: route_id }: Scoped,
   Query(params): Query<TimesQuery>,
 ) -> crate::Res<RouteTimes> {
-  let scope = state.transit.resolve(&provider)?;
   let direction = params.direction_id.unwrap_or(0);
   let (shape_id, stop) = (params.shape_id.as_deref(), params.stop.as_deref());
 
@@ -69,10 +58,9 @@ pub async fn times(
 ///# GET <MOVA>/route/schedule/:provider/:id?direction_id=0&stop=<id>&day=habil|sabado|domingo
 pub async fn schedule(
   State(state): State<crate::State>,
-  Path((provider, route_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: route_id }: Scoped,
   Query(params): Query<ScheduleQuery>,
 ) -> crate::Res<RouteSchedule> {
-  let scope = state.transit.resolve(&provider)?;
   let direction = params.direction_id.unwrap_or(0);
 
   let schedule = RouteSchedule::load(&state.transit, &scope, &route_id, direction, &params.stop, params.day).await?;

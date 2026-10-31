@@ -42,9 +42,8 @@ pub async fn list(
 /// GTFS only, no IM quota
 pub async fn stop(
   State(state): State<crate::State>,
-  Path((provider, stop_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: stop_id }: Scoped,
 ) -> crate::Res<Stop> {
-  let scope = state.transit.resolve(&provider)?;
   let stop = Stop::load(&state.transit, &scope, &stop_id).await?;
 
   tracing::info!(provider, stop = stop_id, lines = stop.lines.len(), "GET 200 /stop/:provider/:id");
@@ -55,10 +54,9 @@ pub async fn stop(
 /// Positions only, from the in-memory fleet
 pub async fn buses(
   State(state): State<crate::State>,
-  Path((provider, stop_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: stop_id }: Scoped,
   Query(params): Query<BusesQuery>,
 ) -> crate::Res<Vec<Bus>> {
-  let scope = state.transit.resolve(&provider)?;
   let stop = Stop::load(&state.transit, &scope, &stop_id).await?;
   let mut line_ids: Vec<String> = stop.lines.iter().map(|l| l.line.clone()).collect();
   line_ids.sort();
@@ -84,9 +82,8 @@ pub struct BusesQuery {
 /// GTFS only
 pub async fn schedule(
   State(state): State<crate::State>,
-  Path((provider, stop_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: stop_id }: Scoped,
 ) -> crate::Res<StopSchedule> {
-  let scope = state.transit.resolve(&provider)?;
   let schedule = StopSchedule::load(&state.transit, &scope, &stop_id).await?;
 
   let departures: usize = schedule.lines.iter().map(|l| l.departures.len()).sum();
@@ -103,9 +100,8 @@ pub async fn schedule(
 ///# GET <MOVA>/stop/arrivals/:provider/:id
 pub async fn arrivals(
   State(state): State<crate::State>,
-  Path((provider, stop_id)): Path<(String, String)>,
+  Scoped { scope, provider, id: stop_id }: Scoped,
 ) -> crate::Res<StopDetail> {
-  let scope = state.transit.resolve(&provider)?;
   let detail = StopDetail::load(&state.transit, &scope, &stop_id).await?;
 
   let rt = detail.lines.iter().flat_map(|l| &l.arrivals).filter(|a| a.live).count();
@@ -114,19 +110,9 @@ pub async fn arrivals(
   Ok(Json(detail))
 }
 
-#[derive(serde::Deserialize)]
-pub struct SearchQuery {
-  q: String,
-  near: Option<String>,
-}
-
 ///# GET <MOVA>/stops/search?q=tres cruces&near=-34.9,-56.16
 pub async fn search(State(state): State<crate::State>, Query(query): Query<SearchQuery>) -> crate::Res<Vec<StopHit>> {
-  let term = query.q.trim();
-  if term.is_empty() {
-    return Err(crate::Error::BadRequest("q must not be empty".into()));
-  }
-  let near = query.near.as_deref().map(point).transpose()?;
+  let (term, near) = (query.term()?, query.near()?);
 
   let hits = Stop::load_search(&state.transit, term, near).await?;
   tracing::info!(term, hits = hits.len(), "GET 200 /stops/search");
