@@ -1,103 +1,266 @@
 ---
+import {PUBLIC_SITE_URL} from 'astro:env/client';
 import Base from '~/layouts/Base.astro';
-import {REGIONS} from '~/lib/domain/regions';
+import {api} from '~/lib/api/client';
+import {serviceOf, stopKicker} from '~/lib/domain/providers';
+import {REGIONS, regionById} from '~/lib/domain/regions';
+import {fullStopName, rawId} from '~/lib/format';
+import {coverage} from '~/lib/landing/coverage';
+import {DEMO_STOPS, type DemoStop} from '~/lib/landing/demo';
+import LiveStop from '~/lib/landing/LiveStop';
+import UruguayMap from '~/lib/landing/UruguayMap';
 import LineSearch from '~/lib/line/LineSearch';
-import Header from '~/lib/ui/Header.astro';
 import {href} from '~/lib/ui/href';
-import MapLink from '~/lib/ui/MapLink.astro';
+import ThemeToggle from '~/lib/ui/ThemeToggle';
+
+// build time only
+const [routes, stopsByRegion, demo] = await Promise.all([
+  api.routes(),
+  Promise.all(REGIONS.map((r) => api.stops(r.id))),
+  Promise.allSettled(DEMO_STOPS.map((d) => api.stop(d.id))),
+]);
+
+// unpublished stops leave the demo
+const stops = demo.flatMap((result, i): DemoStop[] => {
+  if (result.status === 'rejected') return [];
+  const stop = result.value;
+  const number = rawId(stop.siblings[0] ?? stop.stop_id);
+  return [
+    {
+      id: stop.stop_id,
+      label: DEMO_STOPS[i].label,
+      kicker: stopKicker(stop.stop_id, stop.stop_name, number, stop.station),
+      name: fullStopName(stop.stop_name, stop.station),
+      place: regionById(stop.area)?.name ?? DEMO_STOPS[i].label,
+      service: serviceOf(stop.stop_id),
+    },
+  ];
+});
 ---
 
 <Base
-  title='Bondi'
-  description='Consultá horarios, recorridos y llegadas en tiempo real de todo el transporte público uruguayo. Buscá tu línea o mirá las paradas cercanas.'>
-  <Header />
+  title='Bondi: horarios y buses en vivo en todo Uruguay'
+  description='Cuánto falta, cómo llegar y dónde viene tu bus, en todo el transporte público de Uruguay.'
+  canonical={`${PUBLIC_SITE_URL}/`}>
+  <header class='bar'>
+    <div class='inner'>
+      <a class='brand' href='/' aria-label='bondi, inicio'>
+        bondi
+      </a>
+      <div class='actions'>
+        <ThemeToggle client:load />
+        <a class='get' href={href.map()}>
+          Ver mapa
+        </a>
+      </div>
+    </div>
+  </header>
+
   <main>
-    <section class='hero'>
-      <h1>¿Qué bondi te lleva?</h1>
-      <p class='lede'>Horarios, recorridos y llegadas en tiempo real del transporte público uruguayo.</p>
-      <LineSearch client:idle />
-      <MapLink href={href.map()} title='Ver el mapa' sub='Paradas cercanas y buses en vivo' />
+    <section class='hero' aria-labelledby='hero-title'>
+      <div class='intro'>
+        <h1 id='hero-title'>¿Qué bondi te lleva?</h1>
+        <p class='lede'>Horarios, recorridos y llegadas en vivo de todo el transporte público de Uruguay.</p>
+        <div class='search'>
+          <LineSearch client:idle />
+        </div>
+      </div>
+      <LiveStop client:visible stops={stops} />
     </section>
 
-    <section class='regions'>
-      <h2>Regiones</h2>
-      <ul>
-        {REGIONS.map((region) => (
-          <li>
-            <a href={href.region(region.slug)}>{region.name}</a>
-          </li>
-        ))}
-      </ul>
-      <p class='note'>
-        Montevideo y el área metropolitana con todas sus líneas, los interdepartamentales de todo el país, y Maldonado,
-        Colonia, Paysandú y Rivera con sus buses en vivo.
-      </p>
-    </section>
+    <div class='band surface'>
+      <div class='column'>
+        <UruguayMap client:visible coverage={coverage(routes, stopsByRegion)} />
+      </div>
+    </div>
   </main>
+
+  <footer>
+    <div class='inner'>
+      <div class='about'>
+        <span class='brand'>bondi</span>
+        <p>El transporte público de Uruguay, en vivo.</p>
+        <a href={href.map()}>Mapa</a>
+      </div>
+      <nav aria-label='Departamentos'>
+        <ul>
+          {REGIONS.map((region) => (
+            <li>
+              <a href={href.region(region.slug)}>{region.name}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </div>
+  </footer>
 </Base>
 
 <style>
-  main {
-    max-width: var(--content-max);
+  /* astro-island is display: contents, needs a wrapper */
+  .bar .inner,
+  .hero,
+  .column,
+  footer .inner {
+    max-width: var(--landing-max);
     margin: 0 auto;
-    padding: var(--space-8) var(--gutter);
+    padding-left: max(var(--gutter), env(safe-area-inset-left));
+    padding-right: max(var(--gutter), env(safe-area-inset-right));
+  }
+
+  .bar .inner {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
+    justify-content: space-between;
+    align-items: center;
+    min-height: calc(var(--tap) + var(--space-4));
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--brand-deep);
+  }
+
+  .brand {
+    color: var(--brand-deep);
+    font-size: var(--text-2xl);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+  }
+
+  .get {
+    display: inline-flex;
+    align-items: center;
+    height: var(--tap);
+    padding: 0 var(--space-5);
+    border-radius: var(--radius-pill);
+    background: var(--brand-deep);
+    color: var(--service-header-on);
+    font-weight: 600;
+    transition: scale 160ms var(--ease-out);
+  }
+
+  @media (hover: hover) {
+    .brand:hover,
+    .get:hover {
+      text-decoration: none;
+    }
+
+    .get:hover {
+      background: oklch(from var(--brand-deep) calc(l - 0.05) c h);
+    }
+  }
+
+  .get:active {
+    scale: 0.97;
   }
 
   .hero {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
+    align-items: center;
+    gap: calc(var(--space-8) * 1.5);
+    padding-top: var(--space-8);
+    padding-bottom: calc(var(--space-8) * 2);
+  }
+
+  .intro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-6);
+    width: 100%;
+    max-width: 34rem;
+    text-align: center;
+  }
+
+  h1 {
+    font-size: clamp(var(--text-4xl), 5vw + 1rem, var(--text-5xl));
+    font-weight: 750;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    text-wrap: balance;
   }
 
   .lede {
+    max-width: 30rem;
     color: var(--text-secondary);
+    font-size: var(--text-lg);
+    text-wrap: balance;
   }
 
-  .regions {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
+  .search {
+    width: 100%;
+    text-align: left;
   }
 
-  .regions ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-2);
+  .band {
+    padding: calc(var(--space-8) * 1.75) 0;
   }
 
-  .regions a {
-    display: inline-flex;
-    align-items: center;
-    min-height: var(--tap);
-    padding: var(--space-2) var(--space-4);
-    background: var(--surface);
-    border: 1px solid var(--divider);
-    border-radius: var(--radius-pill);
-    font-weight: 600;
-  }
-
-  @media (hover: hover) {
-    .regions a:hover {
-      text-decoration: none;
-      border-color: var(--brand);
-      color: var(--brand);
+  @media (min-width: 760px) {
+    .band {
+      padding: calc(var(--space-8) * 2.5) 0;
     }
   }
 
-  .regions a:active {
-    text-decoration: none;
-    border-color: var(--brand);
-    color: var(--brand);
+  .band.surface {
+    background: var(--surface);
   }
 
-  .note {
+  main :global(h2.title) {
+    font-size: clamp(var(--text-3xl), 2vw + 1rem, var(--text-4xl));
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  footer {
+    border-top: 1px solid var(--divider);
+    background: var(--surface);
+  }
+
+  footer .inner {
+    display: grid;
+    gap: var(--space-8);
+    padding-top: calc(var(--space-8) * 1.5);
+    padding-bottom: max(calc(var(--space-8) * 1.5), env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 760px) {
+    footer .inner {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    }
+  }
+
+  .about {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
     color: var(--text-secondary);
-    font-size: var(--text-base);
+    font-size: var(--text-sm);
+  }
+
+  .about .brand {
+    font-size: var(--text-xl);
+  }
+
+  footer nav ul {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr));
+    gap: var(--space-1) var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  footer a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--tap);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
   }
 </style>

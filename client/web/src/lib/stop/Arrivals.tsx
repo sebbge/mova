@@ -1,4 +1,4 @@
-import {For, Match, onCleanup, Show, Switch} from 'solid-js';
+import {For, Match, onCleanup, Switch} from 'solid-js';
 import type {StopLine} from '~/lib/api/types';
 import {href} from '~/lib/ui/href';
 import ArrivalRow from './ArrivalRow';
@@ -24,9 +24,16 @@ export default function Arrivals(props: {stopId: string; split?: boolean}) {
       <Switch
         fallback={
           <>
-            <Show when={source.liveFailed}>
-              <p class={styles.note}>No se pudo actualizar el tiempo real. Lo que ves puede no estar al día.</p>
-            </Show>
+            <Switch>
+              <Match when={source.waitingLive}>
+                <p class={`${styles.note} ${styles.waiting}`} role='status'>
+                  Cargando datos en tiempo real…
+                </p>
+              </Match>
+              <Match when={source.liveFailed}>
+                <p class={styles.note}>No se pudo actualizar el tiempo real. Lo que ves puede no estar al día.</p>
+              </Match>
+            </Switch>
             <ul class='rows'>
               <For each={source.lines}>
                 {(line) => (

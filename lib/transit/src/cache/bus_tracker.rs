@@ -88,9 +88,18 @@ impl BusTracker {
       .collect()
   }
 
+  /// Older readings count as seen without moving the bus
   pub async fn observe(&self, provider: &str, obs: BusEntry) -> Bus {
     let key = bus_key(provider, &obs.id);
     let mut map = self.buses.write().await;
+    if let Some(prev) = map.get_mut(&key)
+      && let Some(bus) = prev.bus.as_ref()
+      && matches!((bus.seen.timestamp, obs.timestamp), (Some(have), Some(got)) if got < have)
+    {
+      let bus = bus.clone();
+      *prev = Tracked::seen(Some(bus.clone()), prev.stale_count);
+      return bus;
+    }
     let (bus, stale_count) = Bus::from_observation(obs, map.get(&key));
     map.insert(key, Tracked::seen(Some(bus.clone()), stale_count));
     bus

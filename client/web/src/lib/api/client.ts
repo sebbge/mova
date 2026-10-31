@@ -47,6 +47,10 @@ export const api = {
 
   stopArrivals: (stopRef: string, o?: Options) => request<StopDetail>(`/stop/arrivals/${refPath(stopRef)}`, o),
 
+  // fleet memory only
+  stopBuses: (stopRef: string, ids: string[], o?: Options) =>
+    request<Bus[]>(`/stop/buses/${refPath(stopRef)}${query({ids: ids.join(',')})}`, o),
+
   stopSchedule: (stopRef: string, o?: Options) => gtfs<StopSchedule>(`/stop/schedule/${refPath(stopRef)}`, o),
 
   routes: (o?: Options) => gtfs<BusRoute[]>('/routes', o),

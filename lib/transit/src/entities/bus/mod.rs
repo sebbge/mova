@@ -42,6 +42,8 @@ impl BusFreshness {
 
 //# Line def
 use crate::cache::Tracked;
+use crate::sdk::arrivals::UpcomingByLine;
+use crate::sdk::geo::Point;
 use crate::sdk::vehicles::{BusEntry, StopRef, Vehicles};
 
 use std::time::Duration;
@@ -132,6 +134,8 @@ pub struct RegionBus {
 pub type Lines = HashMap<String, Line>;
 impl Line {
   pub const FLEET_STALE: Duration = Duration::from_secs(60);
+  /// GPS noise below this
+  const AHEAD_M: f64 = 5.0;
   const FLEET_WAIT: Duration = Duration::from_secs(15);
 
   pub async fn fetch(state: &crate::Transit, scope: &Scope, line_ids: &[String]) -> crate::Result<Lines> {
@@ -153,6 +157,7 @@ impl Line {
       }
     }
     if uncached.is_empty() {
+      Self::freshen(tracker, scope.provider, &mut lines).await;
       return Ok(lines);
     }
 
@@ -177,7 +182,49 @@ impl Line {
       }
     }
 
+    Self::freshen(tracker, scope.provider, &mut lines).await;
     Ok(lines)
+  }
+
+  /// Each bus with the newest pool reading
+  async fn freshen(tracker: &crate::cache::BusTracker, provider: &str, lines: &mut Lines) {
+    for bus in lines.values_mut().flat_map(|l| l.buses.iter_mut()) {
+      let Some(latest) = tracker.get(provider, &bus.seen.id).await else {
+        continue;
+      };
+      if latest.seen.timestamp > bus.seen.timestamp {
+        bus.seen.location = latest.seen.location;
+        bus.seen.timestamp = latest.seen.timestamp;
+        bus.seen.speed = latest.seen.speed;
+        bus.bearing_deg = latest.bearing_deg;
+        bus.still = latest.still;
+      }
+    }
+  }
+
+  /// Arrival API buses into the pool, known ones only when closer to the stop
+  pub async fn observe_upcoming(state: &crate::Transit, scope: &Scope, stop: &Point, upcoming: &mut UpcomingByLine) {
+    use crate::cache::BusTracking;
+    let tracker = state.cache.tracker();
+    let now = chrono::Utc::now();
+    for u in upcoming.values_mut().flatten() {
+      let known = tracker.get(scope.provider, &u.bus.id).await;
+      // timestamped: tracker decides, else distance to the stop
+      let ahead = u.bus.timestamp.is_some()
+        || known
+          .as_ref()
+          .is_none_or(|k| stop.distance_to(&u.bus.location) < stop.distance_to(&k.seen.location) - Self::AHEAD_M);
+      let latest = if ahead {
+        tracker.observe(scope.provider, BusEntry { timestamp: u.bus.timestamp.or(Some(now)), ..u.bus.clone() }).await
+      } else if let Some(k) = known {
+        k
+      } else {
+        continue;
+      };
+      u.bus.location = latest.seen.location;
+      u.bus.timestamp = latest.seen.timestamp;
+      u.bus.speed = latest.seen.speed;
+    }
   }
 
   /// Fleet buses of an authority, for small regions

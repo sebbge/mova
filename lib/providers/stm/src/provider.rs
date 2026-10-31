@@ -47,12 +47,21 @@ impl Feed for Stm {
 
 #[async_trait::async_trait]
 impl Fleet for Stm {
+  /// `stm-online` has no timestamps: fills buses missing from `/buses`, never overrides
   async fn fleet(&self) -> Result<Vec<BusEntry>> {
-    match self.api.fleet().await {
-      Ok(fleet) => Ok(fleet.into_iter().map(BusEntry::from).collect()),
+    let (fleet, online) = tokio::join!(self.api.fleet(), self.api.online());
+    match fleet {
+      Ok(fleet) => {
+        let mut buses: Vec<BusEntry> = fleet.into_iter().map(BusEntry::from).collect();
+        let known: std::collections::HashSet<String> = buses.iter().map(|b| b.id.clone()).collect();
+        let now = chrono::Utc::now();
+        let missing = online.unwrap_or_default().into_iter().map(BusEntry::from).filter(|b| !known.contains(&b.id));
+        buses.extend(missing.map(|b| BusEntry { timestamp: Some(now), ..b }));
+        Ok(buses)
+      }
       Err(e) => {
         tracing::warn!(error = ?e, "[stm/online] fleet fallback");
-        Ok(self.api.online().await?.into_iter().map(BusEntry::from).collect())
+        Ok(online?.into_iter().map(BusEntry::from).collect())
       }
     }
   }

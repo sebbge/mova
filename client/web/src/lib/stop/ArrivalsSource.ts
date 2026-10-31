@@ -14,6 +14,7 @@ export class ArrivalsSource {
   readonly #setTick: Setter<number>;
   readonly #lines: Accessor<StopLine[]>;
   readonly #loading: Accessor<boolean>;
+  readonly #waitingLive: Accessor<boolean>;
   readonly #dispose: () => void;
   readonly #timer: ReturnType<typeof setInterval>;
   protected readonly controller = new AbortController();
@@ -32,6 +33,7 @@ export class ArrivalsSource {
     let dispose!: () => void;
     let lines!: Accessor<StopLine[]>;
     let loading!: Accessor<boolean>;
+    let waitingLive!: Accessor<boolean>;
     createRoot((d) => {
       dispose = d;
       const scheduled = createMemo(() => {
@@ -41,10 +43,12 @@ export class ArrivalsSource {
       lines = createMemo(() => (live().length > 0 ? live() : scheduled()));
       // empty schedule keeps waiting for live
       loading = createMemo(() => !arrivalsAnswered() && (!scheduleAnswered() || scheduled().length === 0));
+      waitingLive = createMemo(() => !arrivalsAnswered() && scheduled().length > 0);
     });
     this.#dispose = dispose;
     this.#lines = lines;
     this.#loading = loading;
+    this.#waitingLive = waitingLive;
 
     api
       .stopSchedule(ref, {signal: this.controller.signal})
@@ -62,6 +66,10 @@ export class ArrivalsSource {
 
   get loading(): boolean {
     return this.#loading();
+  }
+
+  get waitingLive(): boolean {
+    return this.#waitingLive();
   }
 
   get liveFailed(): boolean {

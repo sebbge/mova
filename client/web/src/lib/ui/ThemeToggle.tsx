@@ -2,10 +2,10 @@ import styles from './ThemeToggle.module.css';
 import {theme} from './theme';
 
 // icons switch by css, prerendered html can't know the theme
-export default function ThemeToggle() {
+export default function ThemeToggle(props: {class?: string}) {
   return (
     <button
-      class={styles.toggle}
+      class={`${styles.toggle} ${props.class ?? ''}`}
       type='button'
       aria-label={theme.dark ? 'Usar tema claro' : 'Usar tema oscuro'}
       onClick={() => theme.toggle()}>

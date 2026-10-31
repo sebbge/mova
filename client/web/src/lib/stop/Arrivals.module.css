@@ -8,3 +8,13 @@
   color: var(--text-secondary);
   font-size: var(--text-base);
 }
+
+.waiting {
+  animation: waiting 1.4s ease-in-out infinite;
+}
+
+@keyframes waiting {
+  50% {
+    opacity: 0.55;
+  }
+}

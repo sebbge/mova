@@ -1,0 +1,39 @@
+/* real phone size, zoomed on the page */
+.phone {
+  inline-size: calc(375px + 2 * var(--device-bezel));
+  aspect-ratio: 9 / 19.5;
+  zoom: var(--phone-zoom, 0.8);
+  padding: var(--device-bezel);
+  border-radius: var(--device-radius);
+  background: var(--device-frame);
+  box-shadow: var(--device-shadow);
+}
+
+/* full-bleed bands, as in the sheet */
+.screen {
+  --gutter: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border-radius: calc(var(--device-radius) - var(--device-bezel));
+  padding: 0 var(--gutter);
+  background: var(--sheet);
+  color: var(--text-primary);
+}
+
+.status {
+  flex: none;
+  display: grid;
+  place-items: center;
+  height: var(--tap);
+  margin: 0 calc(var(--gutter) * -1);
+  background: var(--top);
+}
+
+.island {
+  inline-size: 32%;
+  block-size: 40%;
+  border-radius: var(--radius-pill);
+  background: var(--device-island);
+}

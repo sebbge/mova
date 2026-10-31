@@ -3,6 +3,7 @@ use crate::transit::Encoding;
 
 use axum::http::HeaderMap;
 use axum::response::Response;
+use entities::bus::{Bus, Line};
 use entities::stop::{Stop, StopDetail, StopHit, StopSchedule};
 
 #[derive(serde::Deserialize)]
@@ -48,6 +49,35 @@ pub async fn stop(
 
   tracing::info!(provider, stop = stop_id, lines = stop.lines.len(), "GET 200 /stop/:provider/:id");
   Ok(Json(stop))
+}
+
+///# GET <MOVA>/stop/buses/:provider/:id
+/// Positions only, from the in-memory fleet
+pub async fn buses(
+  State(state): State<crate::State>,
+  Path((provider, stop_id)): Path<(String, String)>,
+  Query(params): Query<BusesQuery>,
+) -> crate::Res<Vec<Bus>> {
+  let scope = state.transit.resolve(&provider)?;
+  let stop = Stop::load(&state.transit, &scope, &stop_id).await?;
+  let mut line_ids: Vec<String> = stop.lines.iter().map(|l| l.line.clone()).collect();
+  line_ids.sort();
+  line_ids.dedup();
+
+  let lines = Line::fetch(&state.transit, &scope, &line_ids).await?;
+  let mut buses = Line::collect_deduped(&line_ids, &lines);
+  if let Some(ids) = params.ids.as_deref() {
+    let wanted: std::collections::HashSet<&str> = ids.split(',').collect();
+    buses.retain(|b| wanted.contains(b.seen.id.as_str()));
+  }
+  tracing::info!(provider, stop = stop_id, buses = buses.len(), "GET 200 /stop/buses/:provider/:id");
+  Ok(Json(buses))
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct BusesQuery {
+  /// Buses already on the map
+  pub ids: Option<String>,
 }
 
 ///# GET <MOVA>/stop/schedule/:provider/:id

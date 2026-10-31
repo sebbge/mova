@@ -36,6 +36,26 @@
   }
 }
 
+.brand {
+  flex-shrink: 0;
+  margin-right: var(--space-2);
+  color: inherit;
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+
+  @media (hover: hover) {
+    &:hover {
+      text-decoration: none;
+    }
+  }
+}
+
+/* pulled to the edge */
+.theme {
+  margin-right: calc(var(--space-3) * -1);
+}
+
 /* darker, keeps white contrast */
 .search {
   flex: 1;

@@ -129,6 +129,7 @@ export default function Explore() {
                   arrivals={selection.stops.arrivals}
                   loading={selection.stops.loading}
                   failed={selection.stops.failed}
+                  waitingLive={selection.stops.waitingLive}
                   onSelectLine={(line, destination, company) => selection.openArrival(line, destination, company)}
                   onSelectService={(ref) => selection.switchService(ref)}
                 />

@@ -1,15 +1,23 @@
-import {type Accessor, createSignal, type Setter, untrack} from 'solid-js';
+import {createSignal, untrack, type Accessor, type Setter} from 'solid-js';
 import {api} from '~/lib/api/client';
 import type {Bus, Stop, StopLine} from '~/lib/api/types';
 import {ArrivalsSource} from './ArrivalsSource';
 
+// positions from fleet memory
 class StopSource extends ArrivalsSource {
+  static readonly POSITIONS_MS = 10_000;
+
   readonly #stop: Accessor<Stop | null>;
+  readonly #positions: Accessor<Bus[]>;
+  readonly #setPositions: Setter<Bus[]>;
+  readonly #positionsTimer: ReturnType<typeof setInterval>;
 
   constructor(ref: string, onStop: (stop: Stop) => void) {
     super(ref);
     let setStop: Setter<Stop | null>;
     [this.#stop, setStop] = createSignal<Stop | null>(null);
+    [this.#positions, this.#setPositions] = createSignal<Bus[]>([]);
+    this.#positionsTimer = setInterval(() => void this.#refresh(), StopSource.POSITIONS_MS);
     api
       .stop(ref, {signal: this.controller.signal})
       .then((s) => {
@@ -21,6 +29,27 @@ class StopSource extends ArrivalsSource {
 
   get stop(): Stop | null {
     return this.#stop();
+  }
+
+  get positions(): Bus[] {
+    return this.#positions();
+  }
+
+  close() {
+    clearInterval(this.#positionsTimer);
+    super.close();
+  }
+
+  async #refresh() {
+    const ids = untrack(() => this.buses.map((b) => b.id));
+    if (ids.length === 0) return;
+    const signal = this.controller.signal;
+    try {
+      const fresh = await api.stopBuses(this.ref, ids, {signal});
+      if (!signal.aborted) this.#setPositions(fresh);
+    } catch {
+      // keeps the previous position
+    }
   }
 }
 
@@ -50,6 +79,14 @@ export class StopFeed {
 
   get loading(): boolean {
     return this.#current()?.loading ?? false;
+  }
+
+  get positions(): Bus[] {
+    return this.#current()?.positions ?? [];
+  }
+
+  get waitingLive(): boolean {
+    return this.#current()?.waitingLive ?? false;
   }
 
   get failed(): boolean {

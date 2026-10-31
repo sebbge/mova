@@ -1,6 +1,14 @@
 import {Show} from 'solid-js';
 import styles from './Header.module.css';
 
+export function Brand() {
+  return (
+    <a class={styles.brand} href='/' aria-label='bondi, inicio'>
+      bondi
+    </a>
+  );
+}
+
 export function BackLink(props: {href: string}) {
   return (
     <a class={styles.back} href={props.href} aria-label='Volver'>

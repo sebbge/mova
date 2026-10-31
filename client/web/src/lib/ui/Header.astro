@@ -1,19 +1,21 @@
 ---
 import styles from './Header.module.css';
-import {BackLink, TripQuery} from './HeaderParts';
+import {BackLink, Brand, TripQuery} from './HeaderParts';
 import ThemeToggle from './ThemeToggle';
 
 interface Props {
   back?: string;
+  brand?: boolean; // screens without a title
 }
 
-const {back} = Astro.props;
+const {back, brand} = Astro.props;
 ---
 
 <header class={styles.header}>
   <div class={styles.inner}>
     {back && <BackLink href={back} />}
+    {brand && <Brand />}
     <TripQuery />
-    <ThemeToggle client:load />
+    <ThemeToggle client:load class={styles.theme} />
   </div>
 </header>

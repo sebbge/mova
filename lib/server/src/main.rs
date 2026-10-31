@@ -50,6 +50,7 @@ impl Server {
       .route("/health", get(handlers::health::health))
       .route("/buses", get(handlers::bus::list))
       .route("/stop/arrivals/{provider}/{id}", get(handlers::stop::arrivals))
+      .route("/stop/buses/{provider}/{id}", get(handlers::stop::buses))
       .route("/line/buses/{provider}/{id}", get(handlers::line::buses))
       .route("/route/times/{provider}/{id}", get(handlers::routes::times))
       .route("/route/schedule/{provider}/{id}", get(handlers::routes::schedule))

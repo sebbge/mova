@@ -29,6 +29,7 @@ export class Fleet {
 
     createEffect(() => onCleanup(this.#region.follow(this.#liveRegions()) ?? (() => {})));
     createEffect(() => this.#remember(focus.stops.buses));
+    createEffect(() => this.#remember(focus.stops.positions));
     createEffect(() => this.#remember(focus.line.buses));
     createEffect(() => this.#remember(this.#region.buses));
   }

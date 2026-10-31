@@ -19,6 +19,7 @@ export default function StopSheet(props: {
   arrivals: StopLine[];
   loading: boolean;
   failed?: boolean;
+  waitingLive?: boolean;
   onSelectLine?: (line: string, destination?: string, company?: string) => void;
   onSelectService?: (ref: string) => void; // same shelter, already loaded
 }) {
@@ -70,9 +71,16 @@ export default function StopSheet(props: {
         <Switch
           fallback={
             <>
-              <Show when={props.failed}>
-                <p class={styles.stale}>No se pudo actualizar el tiempo real. Lo que ves puede no estar al día.</p>
-              </Show>
+              <Switch>
+                <Match when={props.waitingLive}>
+                  <p class={`${styles.stale} ${styles.waiting}`} role='status'>
+                    Cargando datos en tiempo real…
+                  </p>
+                </Match>
+                <Match when={props.failed}>
+                  <p class={styles.stale}>No se pudo actualizar el tiempo real. Lo que ves puede no estar al día.</p>
+                </Match>
+              </Switch>
               <ul class={`${styles.lines} sheet-scroll`}>
                 <For each={props.arrivals}>
                   {(line) => (

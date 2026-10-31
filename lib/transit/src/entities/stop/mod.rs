@@ -20,6 +20,8 @@ impl ServiceKey {
 ///# GET <MOVA>/stops/{stop_id}/arrivals
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StopDetail {
+  /// ETAs count from here
+  pub generated_at: chrono::DateTime<chrono::Utc>,
   pub lines: Vec<StopLine>,
 }
 
@@ -116,6 +118,27 @@ pub struct StopArrival {
   pub interpolated: bool,
   /// Another provider's bus placed here by its operator, no ETA
   pub stop_position: Option<StopPosition>,
+  /// Debug only, unused by the web
+  #[serde(default)]
+  pub source: ArrivalSource,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum ArrivalSource {
+  /// GTFS schedule
+  #[default]
+  Schedule,
+  /// Provider's arrival API ETA
+  Upcoming,
+  /// Bus position on the shape plus scheduled time to the stop
+  Projection,
+  /// Lost signal: last ETA minus elapsed time
+  Ghost,
+  /// No ETA, map only
+  Position,
+  /// Another provider's bus at or heading to the stop
+  Relayed,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -204,7 +227,15 @@ impl StopArrival {
     let eta = eta.filter(|&min| min <= 90);
     let mut snap = bus.clone();
     snap.past_stop = false;
-    Self { eta, live: eta.is_some(), bus: Some(snap), zonal: false, interpolated: false, stop_position: None }
+    Self {
+      eta,
+      live: eta.is_some(),
+      bus: Some(snap),
+      zonal: false,
+      interpolated: false,
+      stop_position: None,
+      source: ArrivalSource::Projection,
+    }
   }
 
   pub fn from_upcoming(u: &UpcomingArrival) -> Self {
@@ -214,7 +245,8 @@ impl StopArrival {
       zonal: false,
       interpolated: false,
       stop_position: None,
-      bus: Some(Bus::live(BusEntry { timestamp: None, stop: None, next_stop: None, ..u.bus.clone() })),
+      source: ArrivalSource::Upcoming,
+      bus: Some(Bus::live(BusEntry { stop: None, next_stop: None, ..u.bus.clone() })),
     }
   }
 }
@@ -427,6 +459,7 @@ impl StopLine {
 
       let mut ghost_arrival = entry.arrival.clone();
       ghost_arrival.eta = adjusted_eta;
+      ghost_arrival.source = ArrivalSource::Ghost;
       if let Some(snap) = ghost_arrival.bus.as_mut() {
         snap.freshness = freshness;
       }
@@ -531,6 +564,7 @@ impl StopLine {
         zonal: false,
         interpolated: false,
         stop_position: None,
+        source: ArrivalSource::Position,
       });
     }
   }
@@ -577,6 +611,7 @@ impl StopLine {
         zonal: false,
         interpolated: false,
         stop_position: None,
+        source: ArrivalSource::Position,
       });
     }
   }
@@ -630,6 +665,7 @@ impl StopLine {
           zonal: false,
           interpolated: false,
           stop_position: Some(position),
+          source: ArrivalSource::Relayed,
         };
         Self::slot(lines, &bus.seen.line, bus.seen.destination.as_deref()).arrivals.push(arrival);
       }
@@ -655,7 +691,12 @@ impl StopDetail {
         None => Default::default(),
       }
     };
-    let (upcoming_lines, live_lines) = tokio::join!(upcoming, Line::fetch(state, scope, &line_ids));
+    let (mut upcoming_lines, live_lines, stop) =
+      tokio::join!(upcoming, Line::fetch(state, scope, &line_ids), Stop::load(state, scope, stop_id));
+    if let Ok(stop) = stop {
+      let at = crate::sdk::geo::Point { lat: stop.lat, lng: stop.lng };
+      Line::observe_upcoming(state, scope, &at, &mut upcoming_lines).await;
+    }
 
     // merge
     Ok(Self::build(state, scope, stop_id, static_lines, upcoming_lines, live_lines.unwrap_or_default()).await)
@@ -699,7 +740,7 @@ impl StopDetail {
 
     lines.sort_by(|a, b| a.cmp_by_first_eta(b));
 
-    let detail = Self { lines };
+    let detail = Self { generated_at: chrono::Utc::now(), lines };
 
     #[cfg(debug_assertions)] // DEBUG: write response to response.json
     if let Ok(json) = serde_json::to_string_pretty(&detail)

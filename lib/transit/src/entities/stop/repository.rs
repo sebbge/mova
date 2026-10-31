@@ -35,7 +35,8 @@ impl StopLine {
 
     let q = r#"
     WITH here AS MATERIALIZED (
-      SELECT st.* FROM stop_times st
+      SELECT st.*, t.route_id, t.service_id, t.trip_headsign FROM stop_times st
+      JOIN trips t ON t.region = st.region AND t.provider = st.provider AND t.trip_id = st.trip_id
       WHERE st.region = $3 AND st.provider = $4 AND st.stop_id = $2
         AND EXISTS (SELECT 1 FROM stop_times nx WHERE nx.region = st.region AND nx.provider = st.provider
                     AND nx.trip_id = st.trip_id AND nx.stop_sequence > st.stop_sequence)
@@ -44,13 +45,12 @@ impl StopLine {
         -- Today's normal trips (departure_time up to 24:00:00)
         SELECT
             r.route_short_name                                             AS line,
-            t.trip_headsign                                                AS destination,
+            st.trip_headsign                                                AS destination,
             EXTRACT(EPOCH FROM (st.departure_time - $1::interval))::bigint AS secs,
             st.zonal, st.interpolated
         FROM here        st
-        JOIN trips       t  ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
-        JOIN routes      r  ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
-        JOIN calendar    c  ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
+        JOIN routes      r  ON r.region = st.region AND r.provider = st.provider AND r.route_id = st.route_id
+        JOIN calendar    c  ON c.region = st.region AND c.provider = st.provider AND c.service_id = st.service_id
         WHERE st.departure_time > $1::interval
           AND st.departure_time <= INTERVAL '1 day'
           AND c.start_date <= $5::date
@@ -67,13 +67,12 @@ impl StopLine {
         -- Yesterday's overnight trips (departure_time > 24:00:00)
         SELECT
             r.route_short_name                                                             AS line,
-            t.trip_headsign                                                                AS destination,
+            st.trip_headsign                                                                AS destination,
             EXTRACT(EPOCH FROM (st.departure_time - INTERVAL '1 day' - $1::interval))::bigint AS secs,
             st.zonal, st.interpolated
         FROM here        st
-        JOIN trips       t  ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
-        JOIN routes      r  ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
-        JOIN calendar    c  ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
+        JOIN routes      r  ON r.region = st.region AND r.provider = st.provider AND r.route_id = st.route_id
+        JOIN calendar    c  ON c.region = st.region AND c.provider = st.provider AND c.service_id = st.service_id
         WHERE st.departure_time > INTERVAL '1 day'
           AND st.departure_time - INTERVAL '1 day' > $1::interval
           AND c.start_date <= $5::date - 1
@@ -125,6 +124,7 @@ impl StopLine {
         zonal: row.zonal,
         interpolated: row.interpolated,
         stop_position: None,
+        source: super::ArrivalSource::Schedule,
       });
     }
 
@@ -229,18 +229,18 @@ impl StopSchedule {
     // yesterday past 24 h
     let q = r#"
     WITH here AS MATERIALIZED (
-      SELECT st.* FROM stop_times st
+      SELECT st.*, t.route_id, t.service_id, t.trip_headsign FROM stop_times st
+      JOIN trips t ON t.region = st.region AND t.provider = st.provider AND t.trip_id = st.trip_id
       WHERE st.region = $2 AND st.provider = $3 AND st.stop_id = $1
         AND EXISTS (SELECT 1 FROM stop_times nx WHERE nx.region = st.region AND nx.provider = st.provider
                     AND nx.trip_id = st.trip_id AND nx.stop_sequence > st.stop_sequence)
     )
     SELECT r.route_short_name AS line,
-           t.trip_headsign     AS destination,
+           st.trip_headsign     AS destination,
            EXTRACT(EPOCH FROM st.departure_time)::bigint AS secs, st.zonal, st.interpolated
     FROM here st
-    JOIN trips    t ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
-    JOIN routes   r ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
-    JOIN calendar c ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
+    JOIN routes   r ON r.region = st.region AND r.provider = st.provider AND r.route_id = st.route_id
+    JOIN calendar c ON c.region = st.region AND c.provider = st.provider AND c.service_id = st.service_id
     WHERE st.departure_time <= INTERVAL '1 day'
       AND c.start_date <= $4::date
       AND c.end_date   >= $4::date
@@ -254,12 +254,11 @@ impl StopSchedule {
     UNION ALL
 
     SELECT r.route_short_name AS line,
-           t.trip_headsign     AS destination,
+           st.trip_headsign     AS destination,
            EXTRACT(EPOCH FROM st.departure_time - INTERVAL '1 day')::bigint AS secs, st.zonal, st.interpolated
     FROM here st
-    JOIN trips    t ON t.region = st.region AND t.provider = st.provider AND t.trip_id    = st.trip_id
-    JOIN routes   r ON r.region = t.region  AND r.provider = t.provider AND r.route_id   = t.route_id
-    JOIN calendar c ON c.region = t.region  AND c.provider = t.provider AND c.service_id = t.service_id
+    JOIN routes   r ON r.region = st.region AND r.provider = st.provider AND r.route_id = st.route_id
+    JOIN calendar c ON c.region = st.region AND c.provider = st.provider AND c.service_id = st.service_id
     WHERE st.departure_time > INTERVAL '1 day'
       AND c.start_date <= $4::date - 1
       AND c.end_date   >= $4::date - 1
@@ -783,23 +782,23 @@ macro_rules! projection_cte {
           JOIN trips      t ON t.region = st.region AND t.provider = st.provider AND t.trip_id = st.trip_id
           WHERE st.region = $7 AND st.provider = $8 AND st.stop_id = $5
       ),
+      shape_variants AS (
+          SELECT DISTINCT r.route_short_name AS line, t.shape_id, t.trip_headsign AS headsign
+          FROM routes r
+          JOIN trips  t ON t.region = r.region AND t.provider = r.provider AND t.route_id = r.route_id
+          WHERE r.region = $7 AND r.provider = $8 AND r.route_short_name = ANY($1::text[])
+      ),
+      -- geometry once per shape
       stop_shapes AS (
-          SELECT DISTINCT ON (r.route_short_name, t.shape_id, t.trip_headsign)
-              r.route_short_name  AS line,
-              t.shape_id          AS shape_id,
-              t.trip_headsign     AS headsign,
-              sh.geom             AS shape,
+          SELECT v.line, v.shape_id, v.headsign,
+              sh.geom AS shape,
               ST_LineLocatePoint(sh.geom, p.geom::geometry) AS stop_frac,
-              t.shape_id IN (SELECT shape_id FROM served) AS serves
-          FROM routes     r
-          JOIN trips      t  ON t.region = r.region  AND t.provider = r.provider AND t.route_id = r.route_id
-          JOIN shapes     sh ON sh.region = t.region AND sh.provider = t.provider AND sh.shape_id = t.shape_id
+              v.shape_id IN (SELECT shape_id FROM served) AS serves
+          FROM shape_variants v
+          JOIN shapes sh ON sh.region = $7 AND sh.provider = $8 AND sh.shape_id = v.shape_id
           CROSS JOIN target p
-          WHERE r.region = $7 AND r.provider = $8
-            AND r.route_short_name = ANY($1::text[])
-            AND (t.shape_id IN (SELECT shape_id FROM served)
-                 OR ST_DWithin(sh.geom::geography, p.geom::geography, 30))
-          ORDER BY r.route_short_name, t.shape_id, t.trip_headsign
+          WHERE v.shape_id IN (SELECT shape_id FROM served)
+             OR ST_DWithin(sh.geom::geography, p.geom::geography, 30)
       ),
       line_shapes AS (
           SELECT rc.*
