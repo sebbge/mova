@@ -1,5 +1,5 @@
 [workspace]
-members = ["lib/core", "lib/sdk", "lib/transit", "lib/planner", "lib/server", "lib/providers/*"]
+members = ["core", "sdk", "transit", "planner", "server", "providers/*"]
 resolver = "3"
 
 [workspace.package]
@@ -11,15 +11,15 @@ publish = false
 
 [workspace.dependencies]
 # mova
-mova-core = { path = "lib/core" }
-mova-sdk = { path = "lib/sdk" }
-mova-transit = { path = "lib/transit" }
-mova-planner = { path = "lib/planner" }
+mova-core = { path = "core" }
+mova-sdk = { path = "sdk" }
+mova-transit = { path = "transit" }
+mova-planner = { path = "planner" }
 
 # providers
-mova-provider-busmatick = { path = "lib/providers/busmatick" }
-mova-provider-dnt = { path = "lib/providers/dnt" }
-mova-provider-stm = { path = "lib/providers/stm" }
+mova-provider-busmatick = { path = "providers/busmatick" }
+mova-provider-dnt = { path = "providers/dnt" }
+mova-provider-stm = { path = "providers/stm" }
 
 async-trait = "0.1.92"
 axum = "0.8.9"

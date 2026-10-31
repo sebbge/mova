@@ -1,5 +1,5 @@
 [build]
-target-dir = ".artifact/target"
+target-dir = "../.artifact/target"
 
 [target.x86_64-pc-windows-msvc]
 linker = "rust-lld.exe"
