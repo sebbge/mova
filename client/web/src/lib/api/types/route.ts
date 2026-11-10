@@ -14,6 +14,7 @@ export interface RouteStop {
   station?: string; // platforms only
   platform?: string;
   stop_name: string;
+  area?: string;
   stop_sequence: number;
   lat: number;
   lng: number;

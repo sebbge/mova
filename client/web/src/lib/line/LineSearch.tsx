@@ -1,18 +1,11 @@
 import {createMemo, createSignal, For, Match, onCleanup, Show, Switch} from 'solid-js';
 import {api} from '~/lib/api/client';
 import type {BusRoute} from '~/lib/api/types';
-import {regionById} from '~/lib/domain/regions';
 import {href} from '~/lib/ui/href';
 import LineBadge from './LineBadge';
 import styles from './LineSearch.module.css';
 
 const DEBOUNCE_MS = 250;
-
-// no area -> map
-function lineHref(short: string, area: string | undefined): string {
-  const region = regionById(area);
-  return region ? href.line(region.slug, short) : href.map({linea: short});
-}
 
 export default function LineSearch() {
   const [term, setTerm] = createSignal('');
@@ -87,7 +80,7 @@ export default function LineSearch() {
             <For each={lines()}>
               {(line) => (
                 <li>
-                  <a class={styles.item} href={lineHref(line.short, line.variants[0].area)}>
+                  <a class={styles.item} href={href.lineOrMap(line.variants[0].area, line.short)}>
                     <LineBadge line={line.short} />
                     <span class={styles.names}>
                       {line.variants[0].route_long_name ?? ''}

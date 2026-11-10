@@ -5,7 +5,7 @@ export default defineConfig({
   output: 'static',
   outDir: '../../.artifact/web',
   trailingSlash: 'never',
-  build: {format: 'file'},
+  build: {format: 'file', concurrency: 16},
   server: {port: 5173},
   integrations: [solid()],
   env: {

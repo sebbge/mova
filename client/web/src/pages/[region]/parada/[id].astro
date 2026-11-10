@@ -11,12 +11,13 @@ import Header from '~/lib/ui/Header.astro';
 import {href} from '~/lib/ui/href';
 import MapLink from '~/lib/ui/MapLink.astro';
 import SourceCredit from '~/lib/ui/SourceCredit';
-import {stopPaths} from '../../_paths';
+import {lineAreas, stopPaths} from '../../_paths';
 
 export const getStaticPaths = stopPaths;
 
 const {region} = Astro.props as {region: Region};
 const stop = await api.stop(Astro.params.id!);
+const lineArea = new Map((await lineAreas()).map((l) => [l.line, l.area]));
 const name = stop.stop_name;
 const number = rawId(stop.siblings[0] ?? stop.stop_id);
 const siblings = orderedRefs(stop.siblings);
@@ -85,7 +86,7 @@ const jsonLd = JSON.stringify({
         <ul class='rows lines'>
           {stop.lines.map((line) => (
             <li>
-              <a href={href.line(region.slug, line.line)}>
+              <a href={href.lineOrMap(lineArea.get(line.line), line.line)}>
                 <LineBadge line={line.line} size='sm' />
                 {line.destinations.length > 0 && <span class='destinations'>{line.destinations.join(' · ')}</span>}
               </a>

@@ -3,7 +3,7 @@ import {PUBLIC_SITE_URL} from 'astro:env/client';
 import Base from '~/layouts/Base.astro';
 import {api} from '~/lib/api/client';
 import type {RouteShape} from '~/lib/api/types';
-import type {Region} from '~/lib/domain/regions';
+import {regionById, type Region} from '~/lib/domain/regions';
 import LineBadge from '~/lib/line/LineBadge';
 import Header from '~/lib/ui/Header.astro';
 import MapLink from '~/lib/ui/MapLink.astro';
@@ -78,7 +78,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
             <ol class='rows stops'>
               {s.stops.map((stop) => (
                 <li>
-                  <a href={href.stop(region.slug, stop.stop_id)}>
+                  <a href={href.stop((regionById(stop.area) ?? region).slug, stop.stop_id)}>
                     <span class='id'>{rawId(stop.stop_id)}</span>
                     <span class='name'>{fullStopName(stop.stop_name, stop.station)}</span>
                   </a>

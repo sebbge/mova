@@ -1,16 +1,32 @@
 import {api} from '~/lib/api/client';
-import {REGIONS} from '~/lib/domain/regions';
+import {REGIONS, type Region} from '~/lib/domain/regions';
 import {lineSlug} from '~/lib/format';
 
 export function regionPaths() {
   return REGIONS.map((region) => ({params: {region: region.slug}, props: {region}}));
 }
 
-export async function stopPaths() {
-  const byRegion = await Promise.all(REGIONS.map((r) => api.stops(r.id)));
-  return REGIONS.flatMap((region, i) =>
-    byRegion[i].map((stop) => ({params: {region: region.slug, id: stop.id}, props: {region}}))
+// one point per shelter in the list, its siblings from the stop
+export async function stopRefs(): Promise<{region: Region; id: string}[]> {
+  const byRegion = await Promise.all(
+    REGIONS.map((r) =>
+      api
+        .stops(r.id)
+        .then((stops) =>
+          Promise.all(
+            stops.map(async (s) => ((s.providers?.length ?? 0) > 1 ? (await api.stop(s.id)).siblings : [s.id]))
+          )
+        )
+    )
   );
+  const seen = new Set<string>();
+  return REGIONS.flatMap((region, i) =>
+    byRegion[i].flat().flatMap((id) => (seen.has(id) ? [] : (seen.add(id), [{region, id}])))
+  );
+}
+
+export async function stopPaths() {
+  return (await stopRefs()).map(({region, id}) => ({params: {region: region.slug, id}, props: {region}}));
 }
 
 // one department per line, no duplicate pages
