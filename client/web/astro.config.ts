@@ -12,6 +12,7 @@ export default defineConfig({
     schema: {
       PUBLIC_API_URL: envField.string({context: 'client', access: 'public'}),
       PUBLIC_SITE_URL: envField.string({context: 'client', access: 'public'}),
+      PUBLIC_TILES_URL: envField.string({context: 'client', access: 'public'}),
     },
   },
   vite: {
