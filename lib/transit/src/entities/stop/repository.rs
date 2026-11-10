@@ -347,6 +347,7 @@ impl Stop {
     #[derive(sqlx::FromRow)]
     struct RouteRow {
       line: String,
+      area: Option<String>,
       destination: Option<String>,
     }
 
@@ -372,7 +373,10 @@ impl Stop {
       WHERE sl.region = $2 AND sl.provider = $3 AND sl.stop_id = $1
         AND NOT EXISTS (SELECT 1 FROM scheduled ch WHERE ch.line = sl.line)
     )
-    SELECT line, destination FROM (
+    SELECT line, destination,
+           (SELECT r.area FROM routes r WHERE r.region = $2 AND r.provider = $3
+              AND r.route_short_name = u.line AND r.area IS NOT NULL LIMIT 1) AS area
+    FROM (
       SELECT * FROM scheduled UNION ALL SELECT * FROM roster_only
     ) u
     ORDER BY NULLIF(regexp_replace(line, '\D', '', 'g'), '')::bigint NULLS LAST,
@@ -393,7 +397,7 @@ impl Stop {
             last.destinations.push(d);
           }
         }
-        _ => lines.push(StopRoute { line: r.line, destinations: dest.into_iter().collect() }),
+        _ => lines.push(StopRoute { line: r.line, area: r.area, destinations: dest.into_iter().collect() }),
       }
     }
 

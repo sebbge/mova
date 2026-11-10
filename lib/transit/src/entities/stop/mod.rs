@@ -71,6 +71,9 @@ pub struct Stop {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct StopRoute {
   pub line: String,
+  /// Department of the line page, not always the stop's
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub area: Option<String>,
   /// By trip count
   pub destinations: Vec<String>,
 }

@@ -47,6 +47,8 @@ pub struct RouteStop {
   /// Shelter ref
   pub cluster: String,
   pub stop_name: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub area: Option<String>,
   pub stop_sequence: i32,
   pub lat: f64,
   pub lng: f64,
