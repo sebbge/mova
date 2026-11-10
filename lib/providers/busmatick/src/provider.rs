@@ -1,12 +1,12 @@
 use crate::BusmatickConfig;
-use crate::api::colonia::{self, Shapes};
-use crate::api::{self, Marker, codesa};
+use crate::api::{codesa, colonia};
 use crate::sdk::prelude::*;
 
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 
+#[derive(Clone)]
 pub struct Busmatick {
   http: reqwest::Client,
   base: String,
@@ -26,11 +26,10 @@ impl Busmatick {
     Self { http, base: config.base.clone(), company, tag: format!("[{id}/avl]") }
   }
 
-  async fn markers(&self) -> Result<Vec<Marker>> {
-    api::markers(&self.http, &self.base, self.company, &self.tag).await
+  async fn markers(&self) -> Result<Vec<crate::api::Marker>> {
+    crate::api::markers(&self.http, &self.base, self.company, &self.tag).await
   }
 }
-
 #[async_trait::async_trait]
 impl Fleet for Busmatick {
   async fn fleet(&self) -> Result<Vec<BusEntry>> {
@@ -38,6 +37,7 @@ impl Fleet for Busmatick {
   }
 }
 
+//
 pub struct Codesa {
   http: reqwest::Client,
   base: String,
@@ -47,7 +47,6 @@ impl Codesa {
     Ok(Self { http: http::client(Duration::from_secs(60))?, base: config.base.clone() })
   }
 }
-
 #[async_trait::async_trait]
 impl Feed for Codesa {
   async fn version(&self) -> Result<String> {
@@ -65,18 +64,20 @@ impl Feed for Codesa {
   }
 }
 
+//
+#[derive(Clone)]
 pub struct Solantigua {
   http: reqwest::Client,
   avl: Busmatick,
-  shapes: RwLock<Option<Arc<Shapes>>>,
+  shapes: Arc<RwLock<Option<Arc<colonia::Shapes>>>>,
 }
 impl Solantigua {
   pub fn new(config: &BusmatickConfig) -> Result<Self> {
     let avl = Busmatick::new("solantigua", "SOL ANTIGUA", config)?;
-    Ok(Self { http: http::client(Duration::from_secs(60))?, avl, shapes: RwLock::new(None) })
+    Ok(Self { http: http::client(Duration::from_secs(60))?, avl, shapes: Arc::default() })
   }
 
-  async fn shapes(&self) -> Result<Arc<Shapes>> {
+  async fn shapes(&self) -> Result<Arc<colonia::Shapes>> {
     if let Some(shapes) = self.shapes.read().await.as_ref() {
       return Ok(shapes.clone());
     }
@@ -87,9 +88,9 @@ impl Solantigua {
   }
 }
 
-async fn index(zip: Vec<u8>) -> Result<(Vec<u8>, Result<Shapes>)> {
+async fn index(zip: Vec<u8>) -> Result<(Vec<u8>, Result<colonia::Shapes>)> {
   tokio::task::spawn_blocking(move || {
-    let shapes = Shapes::from_zip(&zip);
+    let shapes = colonia::Shapes::from_zip(&zip);
     (zip, shapes)
   })
   .await

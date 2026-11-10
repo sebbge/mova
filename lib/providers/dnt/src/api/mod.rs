@@ -11,13 +11,10 @@ mod synthesis;
 
 use crate::sdk::prelude::*;
 
-pub use feed::rebuild as rebuild_feed;
 pub use index::Index;
-pub use kml::{Shape, parse as parse_kml};
-pub use long_distance::{Trip, corridors, parse as parse_long_distance};
+pub use long_distance::{Trip, corridors};
 pub use online::OnlineBus;
 pub use places::all as places;
-pub use roster::{lines_by_stop as fetch_roster, parse as parse_roster};
 pub use seguitubus::Service;
 pub use synthesis::gtfs as synthesize;
 
@@ -25,6 +22,7 @@ use std::time::Duration;
 
 const LONG_DISTANCE: &str = "horarios_largadistancia";
 
+#[derive(Clone)]
 pub struct DntApi {
   http: reqwest::Client,
 }

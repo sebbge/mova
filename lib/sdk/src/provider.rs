@@ -21,23 +21,23 @@ impl Provider {
     Self { id, authority, regions, feed: None, vehicles: None, arrivals: None, fares: None }
   }
 
-  pub fn feed(self, feed: Arc<dyn Feed>) -> Self {
-    Self { feed: Some(feed), ..self }
+  pub fn feed(self, feed: impl Feed + 'static) -> Self {
+    Self { feed: Some(Arc::new(feed)), ..self }
   }
 
-  pub fn fleet(self, fleet: Arc<dyn Fleet>) -> Self {
-    Self { vehicles: Some(Vehicles::Fleet(fleet)), ..self }
+  pub fn fleet(self, fleet: impl Fleet + 'static) -> Self {
+    Self { vehicles: Some(Vehicles::Fleet(Arc::new(fleet))), ..self }
   }
 
-  pub fn lines(self, lines: Arc<dyn LineBuses>) -> Self {
-    Self { vehicles: Some(Vehicles::Lines(lines)), ..self }
+  pub fn lines(self, lines: impl LineBuses + 'static) -> Self {
+    Self { vehicles: Some(Vehicles::Lines(Arc::new(lines))), ..self }
   }
 
-  pub fn arrivals(self, arrivals: Arc<dyn Arrivals>) -> Self {
-    Self { arrivals: Some(arrivals), ..self }
+  pub fn arrivals(self, arrivals: impl Arrivals + 'static) -> Self {
+    Self { arrivals: Some(Arc::new(arrivals)), ..self }
   }
 
-  pub fn fares(self, fares: Arc<dyn Fares>) -> Self {
-    Self { fares: Some(fares), ..self }
+  pub fn fares(self, fares: impl Fares + 'static) -> Self {
+    Self { fares: Some(Arc::new(fares)), ..self }
   }
 }

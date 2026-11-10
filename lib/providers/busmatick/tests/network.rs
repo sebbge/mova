@@ -23,7 +23,7 @@ async fn three_instances_respond() {
 
 #[tokio::test]
 #[ignore = "network"]
-async fn paysandu_y_rivera_responden() {
+async fn paysandu_and_rivera_respond() {
   let copay = copay(config("https://bus.copay.com.uy:10443/pub")).expect("config");
   let rivera = microrivera(config("http://microltda.ddns.net:8705/pub")).expect("config");
 

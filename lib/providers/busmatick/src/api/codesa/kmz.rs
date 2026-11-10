@@ -33,8 +33,8 @@ pub fn stops(kml: &str) -> Vec<Stop> {
     .split("<Placemark>")
     .skip(1)
     .filter_map(|block| {
-      let name = unescape(between(block, "<name>", "</name>")?);
-      let (code, name) = crate::names::split_stop(&name)?;
+      let label = unescape(between(block, "<name>", "</name>")?);
+      let (code, name) = crate::names::split_stop(&label)?;
       let (lng, lat) = *coordinates(between(block, "<coordinates>", "</coordinates>")?).first()?;
       Some(Stop { code: code.to_string(), name: name.to_string(), location: Point { lat, lng } })
     })

@@ -47,11 +47,11 @@ impl Shapes {
     for line in lines {
       let cols = fields(line);
       let get = |i: usize| cols.get(i).map(|s| s.trim()).unwrap_or_default();
-      let (Ok(direction), shape_id) = (get(direction).parse::<u8>(), get(shape)) else {
+      let (Ok(direction_id), shape_id) = (get(direction).parse::<u8>(), get(shape)) else {
         continue;
       };
       if !shape_id.is_empty() {
-        out.entry((get(route).to_string(), direction)).or_insert_with(|| shape_id.to_string());
+        out.entry((get(route).to_string(), direction_id)).or_insert_with(|| shape_id.to_string());
       }
     }
     if out.is_empty() {
@@ -60,20 +60,12 @@ impl Shapes {
     Ok(Self(out))
   }
 
-  pub fn len(&self) -> usize {
-    self.0.len()
-  }
-
-  pub fn is_empty(&self) -> bool {
-    self.0.is_empty()
-  }
-
   pub fn shape(&self, line: &str, subline: &str) -> Option<String> {
-    let direction = match subline {
+    let direction_id = match subline {
       "1" => 1,
       "2" | "4" => 0,
       _ => return None,
     };
-    self.0.get(&(line.to_string(), direction)).cloned()
+    self.0.get(&(line.to_string(), direction_id)).cloned()
   }
 }

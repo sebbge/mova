@@ -13,16 +13,16 @@ const ALIAS: &[(&str, &str)] = &[
 
 pub fn destination(raw: &str) -> String {
   let text = raw.split('(').next().unwrap_or(raw).trim().to_uppercase();
-  let destination = match text.rsplit_once(" - ") {
-    Some((_, destination)) => destination.trim().to_string(),
+  let target = match text.rsplit_once(" - ") {
+    Some((_, target)) => target.trim().to_string(),
     None => {
       let cut = QUALIFIERS.iter().filter_map(|c| text.find(c)).min().unwrap_or(text.len());
       text[..cut].trim().to_string()
     }
   };
-  let destination = PREFIXES.iter().find_map(|p| destination.strip_prefix(p)).unwrap_or(&destination);
-  let destination = ALIAS.iter().find(|(from, _)| *from == destination).map_or(destination, |(_, to)| to);
-  place_name(destination)
+  let target = PREFIXES.iter().find_map(|p| target.strip_prefix(p)).unwrap_or(&target);
+  let target = ALIAS.iter().find(|(from, _)| *from == target).map_or(target, |(_, to)| to);
+  place_name(target)
 }
 
 pub fn match_key(raw: &str) -> String {

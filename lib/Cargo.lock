@@ -1513,7 +1513,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
- "gtfs-structures",
  "mova-sdk",
  "reqwest",
  "serde",

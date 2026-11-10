@@ -5,10 +5,8 @@ mod synthesis;
 
 use crate::sdk::prelude::*;
 
-pub use kmz::{Stop, kml, shape, stops};
-pub use points::table;
 pub use sheet::{Trip, parse as parse_sheet};
-pub use synthesis::{Variant, Variants, anchor, gtfs as synthesize};
+pub use synthesis::{Variant, Variants, gtfs as synthesize};
 
 use futures_util::StreamExt;
 use std::collections::BTreeSet;

@@ -1,25 +1,16 @@
-use super::{StmConfig, api::StmApi};
+use crate::StmConfig;
+use crate::api::StmApi;
 use crate::sdk::prelude::*;
 
+use std::sync::Arc;
+
+#[derive(Clone)]
 pub struct Stm {
-  api: StmApi,
+  api: Arc<StmApi>,
 }
 impl Stm {
   pub fn new(config: StmConfig) -> Result<Self> {
-    let StmConfig { api_url, auth_url, client_id, client_secret } = config;
-
-    for (key, value) in [
-      ("IM_API_URL", &api_url),
-      ("IM_AUTH_URL", &auth_url),
-      ("IM_CLIENT_ID", &client_id),
-      ("IM_CLIENT_SECRET", &client_secret),
-    ] {
-      if value.trim().is_empty() {
-        return Err(Error::Config(format!("stm: missing {key}")));
-      }
-    }
-
-    Ok(Self { api: StmApi::new(api_url, auth_url, client_id, client_secret)? })
+    Ok(Self { api: Arc::new(StmApi::new(config)?) })
   }
 }
 
@@ -47,7 +38,6 @@ impl Feed for Stm {
 
 #[async_trait::async_trait]
 impl Fleet for Stm {
-  /// `stm-online` has no timestamps: fills buses missing from `/buses`, never overrides
   async fn fleet(&self) -> Result<Vec<BusEntry>> {
     let (fleet, online) = tokio::join!(self.api.fleet(), self.api.online());
     match fleet {

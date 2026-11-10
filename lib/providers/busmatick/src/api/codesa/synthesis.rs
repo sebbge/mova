@@ -45,7 +45,7 @@ pub fn gtfs(trips: &[Trip], variants: &Variants) -> Result<Vec<u8>> {
       }
       None => String::new(),
     };
-    let destination = anchors.last().map_or("", |&(i, _)| variant.stops[i].name.as_str());
+    let headsign = anchors.last().map_or("", |&(i, _)| variant.stops[i].name.as_str());
     let _ = writeln!(
       trip_lines,
       "{},{},{},{},{shape_id},{}",
@@ -53,7 +53,7 @@ pub fn gtfs(trips: &[Trip], variants: &Variants) -> Result<Vec<u8>> {
       v.days.service_id(),
       v.service,
       u8::from(v.inbound),
-      quote(destination)
+      quote(headsign)
     );
 
     for (i, seconds) in times(&variant.stops, &anchors) {
@@ -133,8 +133,8 @@ pub fn anchor(trip: &Trip, stops: &[Stop], table: &HashMap<String, Vec<&str>>) -
     let Some(codes) = table.get(&match_key(&passing.stop)) else {
       continue;
     };
-    let since = out.last().map_or(0, |&(i, _)| i + 1);
-    let Some(i) = stops.iter().enumerate().skip(since).find(|(_, p)| codes.contains(&p.code.as_str())).map(|(i, _)| i)
+    let from = out.last().map_or(0, |&(i, _)| i + 1);
+    let Some(i) = stops.iter().enumerate().skip(from).find(|(_, p)| codes.contains(&p.code.as_str())).map(|(i, _)| i)
     else {
       continue;
     };

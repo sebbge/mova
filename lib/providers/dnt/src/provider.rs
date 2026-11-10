@@ -1,9 +1,10 @@
-use super::api::{self, DntApi, Index};
+use crate::api::{DntApi, Index, corridors, places, synthesize};
 use crate::sdk::prelude::*;
 
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+#[derive(Clone)]
 pub struct Dnt {
   api: DntApi,
 }
@@ -39,13 +40,14 @@ impl Fleet for Dnt {
   }
 }
 
+#[derive(Clone)]
 pub struct Inter {
   api: DntApi,
-  index: RwLock<Option<Arc<Index>>>,
+  index: Arc<RwLock<Option<Arc<Index>>>>,
 }
 impl Inter {
   pub fn new() -> Result<Self> {
-    Ok(Self { api: DntApi::new()?, index: RwLock::new(None) })
+    Ok(Self { api: DntApi::new()?, index: Arc::default() })
   }
 
   async fn index(&self) -> Result<Arc<Index>> {
@@ -53,7 +55,7 @@ impl Inter {
       return Ok(index.clone());
     }
     let trips = self.api.long_distance().await?;
-    let index = Arc::new(Index::new(&trips, &api::corridors(&trips)));
+    let index = Arc::new(Index::new(&trips, &corridors(&trips)));
     *self.index.write().await = Some(index.clone());
     Ok(index)
   }
@@ -68,8 +70,8 @@ impl Feed for Inter {
   async fn download(&self) -> Result<Static> {
     let trips = self.api.long_distance().await?;
     let (gtfs, index) = tokio::task::spawn_blocking(move || {
-      let corridors = api::corridors(&trips);
-      let gtfs = api::synthesize(&trips, &corridors, &api::places())?;
+      let corridors = corridors(&trips);
+      let gtfs = synthesize(&trips, &corridors, &places())?;
       Ok::<_, Error>((gtfs, Index::new(&trips, &corridors)))
     })
     .await

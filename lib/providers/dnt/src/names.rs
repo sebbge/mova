@@ -1,7 +1,7 @@
 use crate::sdk::format::place_name;
 
-const EMPRESAS: &[(&str, &str)] = &[("COLEXPRESS", "COLONIAEXPRESS")];
-const LUGARES: &[(&str, &str)] = &[("BSASPORCOLONIA", "COLONIACOMP")];
+const COMPANIES: &[(&str, &str)] = &[("COLEXPRESS", "COLONIAEXPRESS")];
+const PLACES: &[(&str, &str)] = &[("BSASPORCOLONIA", "COLONIACOMP")];
 
 pub fn match_key(raw: &str) -> String {
   raw
@@ -20,11 +20,11 @@ pub fn match_key(raw: &str) -> String {
 }
 
 pub fn company(raw: &str) -> String {
-  alias(match_key(raw), EMPRESAS)
+  alias(match_key(raw), COMPANIES)
 }
 
 pub fn place(raw: &str) -> String {
-  alias(match_key(raw), LUGARES)
+  alias(match_key(raw), PLACES)
 }
 
 fn alias(key: String, table: &[(&str, &str)]) -> String {
@@ -57,7 +57,7 @@ mod tests {
   use super::{company, place, route_name};
 
   #[test]
-  fn concilia_la_ortografia_de_seguitubus() {
+  fn reconciles_seguitubus_spelling() {
     assert_eq!(company("COL. EXPRESS"), company("COLONIA EXPRESS"));
     assert_eq!(place("BS.AS. POR COLONIA"), place("COLONIA(Comp.)"));
     assert_eq!(place("Paysandú"), place("PAYSANDU"));

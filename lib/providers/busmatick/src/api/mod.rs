@@ -3,4 +3,4 @@ pub mod codesa;
 pub mod colonia;
 mod csv;
 
-pub use avl::{Marker, markers, parse as parse_avl};
+pub use avl::{Marker, markers};

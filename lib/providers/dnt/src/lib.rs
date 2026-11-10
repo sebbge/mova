@@ -4,7 +4,6 @@ use sdk::prelude::*;
 mod api;
 mod names;
 mod provider;
-use std::sync::Arc;
 
 const URUGUAY: &[Region] = &[
   Region::UyAr,
@@ -29,7 +28,7 @@ const URUGUAY: &[Region] = &[
 ];
 
 pub fn metropolitan() -> Result<Provider> {
-  let dnt = Arc::new(provider::Dnt::new()?);
+  let dnt = provider::Dnt::new()?;
   Ok(
     Provider::new("dnt", Region::UyMo, &[Region::UyMo, Region::UyCa, Region::UySj, Region::UyFd])
       .feed(dnt.clone())
@@ -38,13 +37,6 @@ pub fn metropolitan() -> Result<Provider> {
 }
 
 pub fn interdepartmental() -> Result<Provider> {
-  let inter = Arc::new(provider::Inter::new()?);
+  let inter = provider::Inter::new()?;
   Ok(Provider::new("inter", Region::Uy, URUGUAY).feed(inter.clone()).fleet(inter))
-}
-
-pub mod test_support {
-  pub use crate::api::{
-    Index, Service, Shape, corridors, fetch_roster, parse_kml, parse_long_distance, parse_roster, places, rebuild_feed,
-    synthesize,
-  };
 }

@@ -18,10 +18,3 @@ tokio.workspace = true
 tracing.workspace = true
 zip.workspace = true
 
-[dev-dependencies]
-mova-sdk.workspace = true
-chrono.workspace = true
-gtfs-structures.workspace = true
-serde_json.workspace = true
-tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-zip.workspace = true

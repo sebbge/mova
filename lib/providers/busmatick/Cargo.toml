@@ -18,7 +18,5 @@ tracing.workspace = true
 zip.workspace = true
 
 [dev-dependencies]
-chrono.workspace = true
 gtfs-structures.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
-zip.workspace = true

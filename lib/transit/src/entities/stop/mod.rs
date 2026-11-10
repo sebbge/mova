@@ -824,12 +824,12 @@ impl StopDetail {
 
     let detail = Self { generated_at: chrono::Utc::now(), lines };
 
-    #[cfg(debug_assertions)] // DEBUG: write response to response.json
-    if let Ok(json) = serde_json::to_string_pretty(&detail)
-      && let Err(e) = std::fs::write("../response.json", &json)
-    {
-      tracing::warn!(error = ?e, "[stops] failed to write debug response.json");
-    }
+    // #[cfg(debug_assertions)] // DEBUG: write response to response.json
+    // if let Ok(json) = serde_json::to_string_pretty(&detail)
+    //   && let Err(e) = std::fs::write("../response.json", &json)
+    // {
+    //   tracing::warn!(error = ?e, "[stops] failed to write debug response.json");
+    // }
 
     detail
   }

@@ -4,6 +4,7 @@ pub mod models;
 pub mod online;
 use self::auth::StmAuth;
 use self::models::{StmLineBus, StmLineVariant, StmUpcomingBus};
+use crate::StmConfig;
 use crate::sdk::feed::HeadsignsByShape;
 use crate::sdk::limiter::{Limiter, Priority};
 use crate::sdk::{Error, Result, http};
@@ -73,7 +74,19 @@ impl StmApi {
   const REFILL: Duration = Duration::from_secs(5);
   const RETRY_AFTER: Duration = Duration::from_secs(30);
 
-  pub fn new(url: String, auth_url: String, client_id: String, client_secret: String) -> Result<Self> {
+  pub fn new(config: StmConfig) -> Result<Self> {
+    for (key, value) in [
+      ("IM_API_URL", &config.api_url),
+      ("IM_AUTH_URL", &config.auth_url),
+      ("IM_CLIENT_ID", &config.client_id),
+      ("IM_CLIENT_SECRET", &config.client_secret),
+    ] {
+      if value.trim().is_empty() {
+        return Err(Error::Config(format!("stm: missing {key}")));
+      }
+    }
+
+    let StmConfig { api_url: url, auth_url, client_id, client_secret } = config;
     let http = http::client(Duration::from_secs(12))?;
     let auth = StmAuth::new(auth_url, client_id, client_secret);
     let limiter = Limiter::new(Self::CAPACITY, Self::REFILL);

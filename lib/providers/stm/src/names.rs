@@ -12,10 +12,10 @@ pub fn stop_name(raw: &str) -> StopName {
 
 fn platform(raw: &str) -> Option<StopName> {
   let words: Vec<&str> = raw.split_whitespace().collect();
-  let [station @ .., anden, number] = words.as_slice() else {
+  let [station @ .., keyword, number] = words.as_slice() else {
     return None;
   };
-  if !matches!(anden.to_lowercase().as_str(), "anden" | "andén") || !number.chars().all(|c| c.is_ascii_digit()) {
+  if !matches!(keyword.to_lowercase().as_str(), "anden" | "andén") || !number.chars().all(|c| c.is_ascii_digit()) {
     return None;
   }
   let station = station.strip_suffix(&["-"]).unwrap_or(station);
@@ -48,10 +48,10 @@ mod tests {
   #[test]
   fn splits_platforms_from_their_station() {
     let belloni = stop_name("Intercambiador Belloni Andén 4");
-    let station = belloni.platform.expect("andén").station;
+    let station = belloni.platform.expect("platform").station;
     assert_eq!((station.as_str(), belloni.name.as_str()), ("Intercambiador Belloni", "Andén 4"));
     let colon = stop_name("Terminal Colon - Anden 5");
-    let platform = colon.platform.expect("andén");
+    let platform = colon.platform.expect("platform");
     assert_eq!(
       (platform.station.as_str(), colon.name.as_str(), platform.code.as_str()),
       ("Terminal Colon", "Andén 5", "5")

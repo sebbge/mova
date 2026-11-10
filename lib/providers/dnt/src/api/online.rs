@@ -3,7 +3,7 @@ use crate::sdk::prelude::*;
 use serde::Deserialize;
 
 const URL: &str = "https://www.montevideo.gub.uy/buses/rest/stm-online";
-const SUBSISTEMAS: [i32; 2] = [3, 4];
+const SUBSYSTEMS: [i32; 2] = [3, 4];
 
 #[derive(Deserialize)]
 struct Collection {
@@ -35,7 +35,8 @@ struct Properties {
   variant: i64,
   #[serde(rename = "destinoDesc")]
   destination: Option<String>,
-  subsistema: i32,
+  #[serde(rename = "subsistema")]
+  subsystem: i32,
   #[serde(rename = "velocidad")]
   speed: Option<f64>,
 }
@@ -74,14 +75,14 @@ impl From<OnlineBus> for BusEntry {
 }
 
 pub async fn buses(client: &reqwest::Client) -> Result<Vec<OnlineBus>> {
-  let [first, second] = SUBSISTEMAS;
+  let [first, second] = SUBSYSTEMS;
   let (mut buses, rest) = tokio::try_join!(subsystem(client, first), subsystem(client, second))?;
   buses.extend(rest);
   Ok(buses)
 }
 
-async fn subsystem(client: &reqwest::Client, subsistema: i32) -> Result<Vec<OnlineBus>> {
-  let body = serde_json::json!({ "subsistema": subsistema });
+async fn subsystem(client: &reqwest::Client, code: i32) -> Result<Vec<OnlineBus>> {
+  let body = serde_json::json!({ "subsistema": code });
   let res = http::fetch(client.post(URL).json(&body), "[dnt/online]").await?;
   let collection: Collection = http::json(res, "[dnt/online]").await?;
 
@@ -92,7 +93,7 @@ impl Feature {
   fn into_bus(self) -> Option<OnlineBus> {
     let Feature { properties: p, geometry } = self;
 
-    if !SUBSISTEMAS.contains(&p.subsistema) {
+    if !SUBSYSTEMS.contains(&p.subsystem) {
       return None;
     }
     let [lng, lat] = geometry.coordinates[..] else {

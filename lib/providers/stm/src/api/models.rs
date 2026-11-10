@@ -38,7 +38,8 @@ pub struct StmBus {
   pub emissions: Option<String>, // CO2 emissions
 
   #[serde(default, deserialize_with = "deser_label")]
-  pub thermal_confort: Option<String>, // AC unit
+  #[serde(rename = "thermalConfort")]
+  pub thermal_comfort: Option<String>, // AC unit
   #[serde(default, deserialize_with = "deser_label")]
   pub access: Option<String>, // accessibility
 }
@@ -58,7 +59,7 @@ impl From<StmBus> for BusEntry {
       timestamp: None,
       access: bus.access,
       emissions: bus.emissions,
-      thermal_comfort: bus.thermal_confort,
+      thermal_comfort: bus.thermal_comfort,
       delay_min: None,
       stop: None,
       next_stop: None,

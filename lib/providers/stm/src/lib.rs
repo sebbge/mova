@@ -5,7 +5,6 @@ mod api;
 mod fares;
 mod names;
 mod provider;
-use std::sync::Arc;
 
 pub struct StmConfig {
   pub api_url: String,
@@ -15,12 +14,12 @@ pub struct StmConfig {
 }
 
 pub fn provider(config: StmConfig) -> Result<Provider> {
-  let stm = Arc::new(provider::Stm::new(config)?);
+  let stm = provider::Stm::new(config)?;
   Ok(
     Provider::new("stm", Region::UyMo, &[Region::UyMo, Region::UyCa, Region::UySj])
       .feed(stm.clone())
       .fleet(stm.clone())
       .arrivals(stm)
-      .fares(Arc::new(fares::StmFares::load()?)),
+      .fares(fares::StmFares::load()?),
   )
 }
