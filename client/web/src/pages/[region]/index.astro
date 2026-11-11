@@ -1,15 +1,30 @@
 ---
 import Base from '~/layouts/Base.astro';
+import {api} from '~/lib/api/client';
 import type {Region} from '~/lib/domain/regions';
+import {COVERAGE_LABEL, department} from '~/lib/landing/coverage';
+import DepartmentShape from '~/lib/landing/DepartmentShape';
 import LineSearch from '~/lib/line/LineSearch';
 import Header from '~/lib/ui/Header.astro';
-import MapLink from '~/lib/ui/MapLink.astro';
 import {href} from '~/lib/ui/href';
 import {regionPaths} from '../_paths';
 
 export const getStaticPaths = regionPaths;
 
 const {region} = Astro.props as {region: Region};
+
+const [routes, stops] = await Promise.all([api.routes(), api.stops(region.id)]);
+const d = department(
+  region,
+  routes.filter((r) => r.area === region.id),
+  stops
+);
+
+const count = (n: number) => n.toLocaleString('es-UY');
+const stats = [
+  {value: d.lines, label: d.lines === 1 ? 'línea' : 'líneas'},
+  {value: d.stops, label: d.stops === 1 ? 'parada' : 'paradas'},
+].filter((s) => s.value > 0);
 ---
 
 <Base
@@ -17,10 +32,34 @@ const {region} = Astro.props as {region: Region};
   description={`Horarios, recorridos y llegadas en tiempo real de los ómnibus de ${region.name}.`}>
   <Header back='/' />
   <main>
-    <h1>{region.name}</h1>
+    <section class='intro' aria-labelledby='region-title'>
+      <div class='copy'>
+        <h1 id='region-title'>{region.name}</h1>
+        <p class='kind'>
+          <span class='swatch' style={`--fill: var(--coverage-${d.coverage})`} aria-hidden='true'></span>
+          {d.liveOnly ? 'Buses en vivo' : COVERAGE_LABEL[d.coverage]}
+        </p>
+        {stats.length > 0 && (
+          <dl class='stats'>
+            {stats.map((s) => (
+              <div>
+                <dt>{s.label}</dt>
+                <dd>{count(s.value)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+      <div class='shape'>
+        <DepartmentShape id={region.id} coverage={d.coverage} />
+      </div>
+    </section>
+
     <LineSearch client:idle />
 
-    <MapLink href={href.map({region: region.slug})} title='Ver el mapa' sub='Paradas cercanas y buses en vivo' />
+    <a class='cta' href={href.map({region: region.slug})}>
+      Ver mapa
+    </a>
   </main>
 </Base>
 
@@ -32,5 +71,99 @@ const {region} = Astro.props as {region: Region};
     display: flex;
     flex-direction: column;
     gap: var(--space-6);
+  }
+
+  .intro {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  h1 {
+    font-size: var(--text-3xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    text-wrap: balance;
+  }
+
+  .kind {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  .swatch {
+    flex: none;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: var(--radius-pill);
+    background: var(--fill);
+  }
+
+  .stats {
+    display: flex;
+    gap: var(--space-6);
+    margin: var(--space-2) 0 0;
+
+    div {
+      display: flex;
+      flex-direction: column-reverse;
+    }
+  }
+
+  dt {
+    color: var(--text-secondary);
+    font-size: var(--text-sm);
+  }
+
+  dd {
+    margin: 0;
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+  }
+
+  .shape {
+    width: 7.5rem;
+    aspect-ratio: 1;
+
+    @media (min-width: 560px) {
+      width: 11rem;
+    }
+  }
+
+  .cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: calc(var(--tap) + var(--space-1));
+    border-radius: var(--radius-pill);
+    background: var(--brand-deep);
+    color: var(--service-header-on);
+    font-weight: 600;
+    transition: scale 160ms var(--ease-out);
+
+    @media (hover: hover) {
+      &:hover {
+        text-decoration: none;
+        background: oklch(from var(--brand-deep) calc(l - 0.05) c h);
+      }
+    }
+
+    &:active {
+      scale: 0.97;
+      text-decoration: none;
+    }
   }
 </style>

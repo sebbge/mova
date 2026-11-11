@@ -64,7 +64,7 @@ export default function LineSearch() {
         type='search'
         value={term()}
         onInput={(e) => onInput(e.currentTarget.value)}
-        placeholder='Buscá una línea: 522, 183…'
+        placeholder='Buscá una línea: 522, 183, 409...'
         aria-label='Buscar línea'
       />
 

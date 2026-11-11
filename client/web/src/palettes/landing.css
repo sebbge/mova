@@ -11,6 +11,8 @@
   --coverage-suburban: oklch(from var(--service-suburban) 0.64 0.09 h);
   --coverage-inter: oklch(from var(--service-inter) 0.9 0.05 h);
   --coverage-edge: var(--surface);
+  /* neighbors on the region page */
+  --coverage-context: var(--surface);
   --coverage-hover-shift: -0.09;
 }
 

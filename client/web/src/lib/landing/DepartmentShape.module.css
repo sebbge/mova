@@ -1,0 +1,17 @@
+.shape {
+  display: block;
+  width: 100%;
+  height: 100%;
+
+  path {
+    fill: var(--coverage-context);
+    stroke: var(--divider);
+    stroke-width: 1.5px;
+    stroke-linejoin: round;
+    vector-effect: non-scaling-stroke;
+  }
+
+  .own {
+    fill: var(--fill);
+  }
+}

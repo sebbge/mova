@@ -1,14 +1,10 @@
 import {createSignal, For, Show} from 'solid-js';
 import {href} from '~/lib/ui/href';
-import type {CoverageSummary, Department} from './coverage';
+import {COVERAGE_LABEL, type CoverageSummary, type Department} from './coverage';
 import {DEPARTMENT_PATHS, DEPARTMENTS_VIEWBOX} from './departments';
 import styles from './UruguayMap.module.css';
 
-const LEGEND = [
-  {coverage: 'urban', label: 'Líneas urbanas'},
-  {coverage: 'suburban', label: 'Metropolitanas'},
-  {coverage: 'inter', label: 'Solo interdepartamentales'},
-] as const;
+const LEGEND = (['urban', 'suburban', 'inter'] as const).map((c) => ({coverage: c, label: COVERAGE_LABEL[c]}));
 
 const count = (n: number) => n.toLocaleString('es-UY');
 const atLeast = (n: number, step: number) => count(Math.floor(n / step) * step);
