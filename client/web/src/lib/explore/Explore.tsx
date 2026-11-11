@@ -1,6 +1,6 @@
 import {createEffect, Match, Show, Switch} from 'solid-js';
 import BusSheet from '~/lib/bus/BusSheet';
-import {MAP_CAMERA} from '~/lib/domain/regions';
+import {mapCameraFor} from '~/lib/domain/regions';
 import LineSheet from '~/lib/line/LineSheet';
 import ScheduleSheet from '~/lib/line/ScheduleSheet';
 import MapCanvas from '~/lib/map/MapCanvas';
@@ -14,7 +14,8 @@ import {MapSelection} from './MapSelection';
 import {MapUrl} from './MapUrl';
 
 export default function Explore() {
-  const selection = new MapSelection(new MapUrl());
+  const url = new MapUrl();
+  const selection = new MapSelection(url);
   const trip = selection.planner;
 
   createEffect(() => {
@@ -27,7 +28,7 @@ export default function Explore() {
       <MapHeader destination={trip.active ? trip.feed.b?.label : undefined} onSearch={() => trip.openSearch('b')} />
       <div class={styles.canvas}>
         <MapCanvas
-          camera={MAP_CAMERA}
+          camera={mapCameraFor(url.get('region'))}
           shape={selection.line.shape}
           routeCompany={selection.routeCompany}
           routeLine={selection.fleet.selected?.line ?? selection.lineId}

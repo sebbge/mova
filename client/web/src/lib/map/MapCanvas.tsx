@@ -80,6 +80,8 @@ export default function MapCanvas(props: {
         style: basemapStyle(styledDark),
         center: [camera.center.lng, camera.center.lat],
         zoom: camera.zoom,
+        bounds: camera.focus,
+        fitBoundsOptions: {padding: 24},
         fadeDuration: 0,
         attributionControl: false,
       });

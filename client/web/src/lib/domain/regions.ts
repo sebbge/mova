@@ -195,11 +195,17 @@ export const MAP_CAMERA = {
   ] as [[number, number], [number, number]],
 };
 
-export type MapCamera = typeof MAP_CAMERA;
+export type MapCamera = typeof MAP_CAMERA & {focus?: Region['bounds']};
 
 export const DEFAULT_REGION = REGIONS[0];
 
 const BY_ID = new Map(REGIONS.map((r) => [r.id, r]));
+
+// the region only picks where the camera starts
+export function mapCameraFor(slug: string | null): MapCamera {
+  const region = REGIONS.find((r) => r.slug === slug);
+  return region ? {...MAP_CAMERA, focus: region.bounds} : MAP_CAMERA;
+}
 
 export function regionById(id: string | undefined): Region | undefined {
   return id ? BY_ID.get(id) : undefined;

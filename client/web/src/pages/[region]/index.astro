@@ -20,7 +20,7 @@ const {region} = Astro.props as {region: Region};
     <h1>{region.name}</h1>
     <LineSearch client:idle />
 
-    <MapLink href={href.map()} title='Ver el mapa' sub='Paradas cercanas y buses en vivo' />
+    <MapLink href={href.map({region: region.slug})} title='Ver el mapa' sub='Paradas cercanas y buses en vivo' />
   </main>
 </Base>
 
