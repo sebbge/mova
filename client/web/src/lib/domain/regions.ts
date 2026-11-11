@@ -5,6 +5,7 @@ export interface Region {
   name: string;
   bounds: [[number, number], [number, number]]; // [[west, south], [east, north]]
   allBuses?: boolean; // too few stops to pick one
+  fleet?: boolean; // answers /buses
 }
 
 export const REGIONS: readonly Region[] = [
@@ -12,6 +13,7 @@ export const REGIONS: readonly Region[] = [
     id: 'uy-mo',
     slug: 'mo',
     name: 'Montevideo',
+    fleet: true,
     bounds: [
       [-56.431, -34.938],
       [-56.017, -34.702],
@@ -57,6 +59,7 @@ export const REGIONS: readonly Region[] = [
     id: 'uy-co',
     slug: 'co',
     name: 'Colonia',
+    fleet: true,
     allBuses: true,
     bounds: [
       [-58.432, -34.476],
@@ -103,6 +106,7 @@ export const REGIONS: readonly Region[] = [
     id: 'uy-ma',
     slug: 'ma',
     name: 'Maldonado',
+    fleet: true,
     bounds: [
       [-55.484, -35.032],
       [-54.464, -33.929],
@@ -113,6 +117,7 @@ export const REGIONS: readonly Region[] = [
     id: 'uy-pa',
     slug: 'pa',
     name: 'Paysandú',
+    fleet: true,
     allBuses: true,
     bounds: [
       [-58.207, -32.596],
@@ -132,6 +137,7 @@ export const REGIONS: readonly Region[] = [
     id: 'uy-rv',
     slug: 'rv',
     name: 'Rivera',
+    fleet: true,
     allBuses: true,
     bounds: [
       [-56.185, -32.11],

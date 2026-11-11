@@ -4,6 +4,7 @@ import {api} from '~/lib/api/client';
 import type {Region} from '~/lib/domain/regions';
 import {COVERAGE_LABEL, department} from '~/lib/landing/coverage';
 import DepartmentShape from '~/lib/landing/DepartmentShape';
+import LiveBuses from '~/lib/landing/LiveBuses';
 import LineSearch from '~/lib/line/LineSearch';
 import Header from '~/lib/ui/Header.astro';
 import {href} from '~/lib/ui/href';
@@ -37,7 +38,7 @@ const stats = [
         <h1 id='region-title'>{region.name}</h1>
         <p class='kind'>
           <span class='swatch' style={`--fill: var(--coverage-${d.coverage})`} aria-hidden='true'></span>
-          {d.liveOnly ? 'Buses en vivo' : COVERAGE_LABEL[d.coverage]}
+          {d.liveOnly ? 'Solo tiempo real' : COVERAGE_LABEL[d.coverage]}
         </p>
         {stats.length > 0 && (
           <dl class='stats'>
@@ -49,6 +50,7 @@ const stats = [
             ))}
           </dl>
         )}
+        {region.fleet && <LiveBuses client:visible region={region.id} />}
       </div>
       <div class='shape'>
         <DepartmentShape id={region.id} coverage={d.coverage} />
