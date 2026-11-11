@@ -73,7 +73,7 @@ function headsign(s: RouteShape, fallback: [string, string]): string {
         {shapes.map((s) => (
           <section data-route={key(s)} data-map={href.map({linea: line, v: s.route_id, d: String(s.direction_id)})}>
             <h2>
-              Hacia {headsign(s, ['ida', 'vuelta'])} · {s.stops.length} paradas
+              Hacia {headsign(s, ['ida', 'vuelta'])}, con {s.stops.length} paradas
             </h2>
             <ol class='rows stops'>
               {s.stops.map((stop) => (

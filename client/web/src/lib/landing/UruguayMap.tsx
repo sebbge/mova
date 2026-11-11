@@ -15,7 +15,7 @@ const atLeast = (n: number, step: number) => count(Math.floor(n / step) * step);
 
 function summary(d: Department): string {
   if (d.liveOnly) return 'Buses en vivo';
-  if (d.lines > 0) return `${count(d.lines)} ${d.lines === 1 ? 'línea' : 'líneas'} · ${count(d.stops)} paradas`;
+  if (d.lines > 0) return `${count(d.lines)} ${d.lines === 1 ? 'línea' : 'líneas.'} ${count(d.stops)} paradas`;
   return `${count(d.stops)} ${d.stops === 1 ? 'parada' : 'paradas'}`;
 }
 
@@ -109,7 +109,7 @@ export default function UruguayMap(props: {coverage: CoverageSummary}) {
           </ul>
 
           <div class={styles.inter}>
-            <h3>Solo interdepartamentales</h3>
+            <h3>Solo interdepartamentales en</h3>
             <ul>
               <For each={inter()}>
                 {(d) => (
