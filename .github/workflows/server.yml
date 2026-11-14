@@ -1,0 +1,74 @@
+name: server
+
+on:
+  push:
+    branches: [showcase]
+    paths:
+      - 'lib/**'
+      - 'deploy/**'
+      - '.github/workflows/server.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: server-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/mova-server
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: lib
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: image
+    if: vars.DEPLOY_HOST != ''
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: deploy
+
+      - name: ssh
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: deploy
+        env:
+          TARGET: ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}
+        run: |
+          ssh "$TARGET" "mkdir -p /opt/edge/sites && (docker network inspect edge >/dev/null 2>&1 || docker network create edge)"
+          scp deploy/docker-compose.yml "$TARGET:/opt/mova/"
+          scp deploy/edge/docker-compose.yml deploy/edge/Caddyfile "$TARGET:/opt/edge/"
+          scp deploy/mova.caddy "$TARGET:/opt/edge/sites/"
+          ssh "$TARGET" "cd /opt/mova && export TAG=${{ github.sha }} && docker compose pull server && docker compose up -d --remove-orphans && docker compose exec -T redis redis-cli FLUSHALL && docker image prune -f"
+          ssh "$TARGET" "cd /opt/edge && docker compose up -d && sleep 3 && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile"

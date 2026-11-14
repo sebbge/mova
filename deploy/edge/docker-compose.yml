@@ -1,0 +1,30 @@
+name: edge
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./sites:/etc/caddy/sites:ro
+      - /opt/mova/tiles:/srv/mova/tiles:ro
+      - data:/data
+      - config:/config
+    networks: [edge]
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+networks:
+  edge:
+    external: true
+
+volumes:
+  data:
+  config:
