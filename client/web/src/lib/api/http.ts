@@ -21,8 +21,21 @@ function apiUrl(): string {
   return PUBLIC_API_URL;
 }
 
+const RETRIES = typeof window === 'undefined' ? 3 : 0; // prerender only, dropped connections
+
+async function get(url: string, signal?: AbortSignal): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(url, {signal});
+    } catch (e) {
+      if (attempt >= RETRIES || signal?.aborted) throw e;
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+    }
+  }
+}
+
 async function send(path: string, opts: Options = {}): Promise<Response> {
-  const res = await fetch(`${apiUrl()}${path}`, {signal: opts.signal});
+  const res = await get(`${apiUrl()}${path}`, opts.signal);
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);
